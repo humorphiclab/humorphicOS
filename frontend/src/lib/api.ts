@@ -1,0 +1,320 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+export async function publicFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Request failed");
+  return res.json();
+}
+
+export interface AuthTokens {
+  access: string;
+  refresh: string;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  phone?: string;
+  role?: { id: number; name: string; slug: string; is_leadership: boolean };
+  college?: string;
+  branch?: string;
+  year?: string;
+  skills?: string[];
+  github?: string;
+  linkedin?: string;
+}
+
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+export interface DashboardStats {
+  today_tasks: number;
+  pending_tasks: number;
+  completed_tasks: number;
+  has_daily_update_today: boolean;
+  upcoming_meetings: { id: number; title: string; start_time: string }[];
+  announcements: { id: number; title: string; priority: string }[];
+}
+
+export function getStoredTokens(): AuthTokens | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("humorphic_tokens");
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function setStoredTokens(tokens: AuthTokens | null) {
+  if (tokens) localStorage.setItem("humorphic_tokens", JSON.stringify(tokens));
+  else localStorage.removeItem("humorphic_tokens");
+}
+
+export function setStoredUser(user: User | null) {
+  if (user) localStorage.setItem("humorphic_user", JSON.stringify(user));
+  else localStorage.removeItem("humorphic_user");
+}
+
+export function getStoredUser(): User | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("humorphic_user");
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function refreshAccessToken(refresh: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_URL}/auth/token/refresh/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const tokens = getStoredTokens();
+    if (tokens) setStoredTokens({ ...tokens, access: data.access });
+    return data.access;
+  } catch {
+    return null;
+  }
+}
+
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const tokens = getStoredTokens();
+  const headers: Record<string, string> = {
+    ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+    ...(options.headers as Record<string, string>),
+  };
+  if (tokens?.access) headers.Authorization = `Bearer ${tokens.access}`;
+
+  let res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  if (res.status === 401 && tokens?.refresh) {
+    const newAccess = await refreshAccessToken(tokens.refresh);
+    if (newAccess) {
+      headers.Authorization = `Bearer ${newAccess}`;
+      res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    }
+  }
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "Request failed" }));
+    throw new Error(error.detail || error.message || "Request failed");
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+async function list<T>(path: string): Promise<T[]> {
+  const data = await apiFetch<Paginated<T> | T[]>(path);
+  return Array.isArray(data) ? data : data.results ?? [];
+}
+
+// ── Auth ──
+export const authApi = {
+  login: (email: string, password: string) =>
+    apiFetch<{ tokens: AuthTokens; user: User }>("/auth/login/", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  register: (data: Record<string, string>) =>
+    apiFetch<User>("/auth/register/", { method: "POST", body: JSON.stringify(data) }),
+  googleLogin: (id_token: string) =>
+    apiFetch<{ tokens: AuthTokens; user: User }>("/auth/google/", {
+      method: "POST",
+      body: JSON.stringify({ id_token }),
+    }),
+  me: () => apiFetch<User>("/auth/me/"),
+  dashboard: () => apiFetch<DashboardStats>("/auth/dashboard/"),
+  users: () => list<User>("/auth/users/"),
+  auditLogs: () => list<AuditLog>("/auth/audit-logs/"),
+};
+
+// ── Core ──
+export const tasksApi = {
+  list: () => list<Task>("/tasks/"),
+  myTasks: () => list<Task>("/tasks/my_tasks/"),
+  kanban: (project?: number) =>
+    apiFetch<Record<string, Task[]>>(`/tasks/kanban/${project ? `?project=${project}` : ""}`),
+};
+
+export const projectsApi = { list: () => list<Project>("/projects/") };
+export const departmentsApi = { list: () => list<Department>("/departments/") };
+export const teamsApi = { list: () => list<Team>("/teams/") };
+
+export const dailyUpdatesApi = {
+  today: () => apiFetch<DailyUpdate | null>("/daily-updates/today/"),
+  create: (data: Partial<DailyUpdate>) =>
+    apiFetch<DailyUpdate>("/daily-updates/", { method: "POST", body: JSON.stringify(data) }),
+  compliance: () => apiFetch<ComplianceStats>("/daily-updates/compliance/"),
+};
+
+export const meetingsApi = {
+  list: () => list<Meeting>("/meetings/"),
+  upcoming: () => apiFetch<Meeting[]>("/meetings/upcoming/"),
+};
+
+export const announcementsApi = { list: () => list<Announcement>("/announcements/") };
+
+export const notificationsApi = {
+  list: () => list<Notification>("/notifications/"),
+  unreadCount: () => apiFetch<{ count: number }>("/notifications/unread_count/"),
+  readAll: () => apiFetch<{ marked_read: number }>("/notifications/read_all/", { method: "POST" }),
+};
+
+export const reportsApi = {
+  list: () => list<Report>("/reports/"),
+  generateDaily: () => apiFetch<Report>("/reports/generate_daily/", { method: "POST" }),
+  generateWeekly: () => apiFetch<Report>("/reports/generate_weekly/", { method: "POST" }),
+  leadershipSummary: () => apiFetch<Record<string, unknown>>("/reports/leadership_summary/"),
+};
+
+// ── Phase 2 ──
+export const attendanceApi = {
+  mark: () => apiFetch<AttendanceRecord>("/attendance/records/mark/", { method: "POST" }),
+  records: () => list<AttendanceRecord>("/attendance/records/"),
+  analytics: () => apiFetch<{ total: number; by_status: { status: string; count: number }[] }>("/attendance/records/analytics/"),
+  holidays: () => list<Holiday>("/attendance/holidays/"),
+  leaves: () => list<LeaveRequest>("/attendance/leaves/"),
+  requestLeave: (data: Partial<LeaveRequest>) =>
+    apiFetch<LeaveRequest>("/attendance/leaves/", { method: "POST", body: JSON.stringify(data) }),
+};
+
+export const inventoryApi = {
+  components: () => list<Component>("/inventory/components/"),
+  lowStock: () => apiFetch<Component[]>("/inventory/components/low_stock/"),
+  equipment: () => list<Equipment>("/inventory/equipment/"),
+  labBookings: () => list<LabBooking>("/inventory/lab-bookings/"),
+};
+
+export const knowledgeApi = {
+  list: () => list<KnowledgeArticle>("/knowledge/"),
+};
+
+export const certificatesApi = {
+  list: () => list<Certificate>("/certificates/"),
+  verify: (code: string) => apiFetch<CertificateVerify>(`/certificates/verify/?code=${code}`),
+};
+
+export const eventsApi = {
+  list: () => list<ClubEvent>("/events/"),
+  publicList: () => publicFetch<Paginated<ClubEvent> | ClubEvent[]>("/events/?public=true").then(
+    (data) => (Array.isArray(data) ? data : data.results ?? [])
+  ),
+  register: (slug: string) =>
+    apiFetch<EventRegistration>(`/events/${slug}/register/`, { method: "POST" }),
+};
+
+export const organizationsApi = {
+  list: () => list<Organization>("/organizations/"),
+  public: () => publicFetch<Organization[]>("/organizations/public/"),
+};
+
+export const gamificationApi = {
+  me: () => apiFetch<GamificationProfile>("/gamification/profiles/me/"),
+  leaderboard: () => apiFetch<GamificationProfile[]>("/gamification/profiles/leaderboard/"),
+  badges: () => list<Badge>("/gamification/badges/"),
+  achievements: () => list<Achievement>("/gamification/achievements/"),
+};
+
+export const chatApi = {
+  channels: () => list<Channel>("/chat/channels/"),
+  channelMessages: (slug: string) => apiFetch<ChannelMessage[]>(`/chat/channels/${slug}/messages/`),
+  sendChannelMessage: (slug: string, content: string) =>
+    apiFetch<ChannelMessage>(`/chat/channels/${slug}/messages/`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  sendDM: (recipient: number, content: string) =>
+    apiFetch<DirectMessage>("/chat/direct/", {
+      method: "POST",
+      body: JSON.stringify({ recipient, content }),
+    }),
+  dmConversation: (userId: number) =>
+    apiFetch<DirectMessage[]>(`/chat/direct/conversation/?user=${userId}`),
+};
+
+// ── Phase 3 ──
+export const aiApi = {
+  chat: (message: string, session_id?: string) =>
+    apiFetch<{ session_id: string; reply: string }>("/ai/chat/", {
+      method: "POST",
+      body: JSON.stringify({ message, session_id }),
+    }),
+  summarize: (type: string, id?: number) =>
+    apiFetch<AiInsight>("/ai/summarize/", { method: "POST", body: JSON.stringify({ type, id }) }),
+  insights: () => list<AiInsight>("/ai/insights/"),
+};
+
+export const calendarApi = {
+  events: (start?: string, end?: string) => {
+    const params = new URLSearchParams();
+    if (start) params.set("start", start);
+    if (end) params.set("end", end);
+    return apiFetch<{ events: CalendarEvent[] }>(`/calendar/?${params}`);
+  },
+};
+
+export const searchApi = {
+  query: (q: string) => apiFetch<SearchResult>(`/search/?q=${encodeURIComponent(q)}`),
+};
+
+export const analyticsApi = {
+  dashboard: () => apiFetch<AnalyticsDashboard>("/analytics/dashboard/"),
+  trends: () => apiFetch<{ trends: TrendPoint[] }>("/analytics/trends/"),
+};
+
+// ── Types ──
+export interface Task {
+  id: number; title: string; description: string; status: string; priority: string;
+  due_date: string | null; assignee_detail?: User; project_detail?: Project;
+}
+export interface Project {
+  id: number; title: string; slug: string; status: string; health: string; completion_percentage: number;
+}
+export interface Department { id: number; name: string; slug: string; color: string; member_count?: number; }
+export interface Team { id: number; name: string; slug: string; member_count?: number; department_detail?: Department; }
+export interface DailyUpdate {
+  id: number; date: string; work_done: string; hours_worked: number;
+  challenges: string; learning: string; tomorrow_plan: string; need_help: string;
+}
+export interface Meeting {
+  id: number; title: string; start_time: string; end_time: string; meet_link: string; agenda: string;
+}
+export interface Announcement { id: number; title: string; content: string; priority: string; is_pinned: boolean; created_at: string; }
+export interface Notification { id: number; title: string; message: string; notification_type: string; is_read: boolean; link: string; created_at: string; }
+export interface Report { id: number; title: string; report_type: string; data: Record<string, unknown>; created_at: string; }
+export interface AttendanceRecord { id: number; date: string; status: string; method: string; check_in: string | null; }
+export interface Holiday { id: number; name: string; date: string; }
+export interface LeaveRequest { id: number; leave_type: string; start_date: string; end_date: string; reason: string; status: string; }
+export interface Component { id: number; name: string; sku: string; category: string; quantity: number; min_stock: number; location: string; is_low_stock?: boolean; }
+export interface Equipment { id: number; name: string; serial_number: string; status: string; }
+export interface LabBooking { id: number; lab_name: string; start_time: string; end_time: string; purpose: string; status: string; }
+export interface KnowledgeArticle { id: number; title: string; slug: string; content: string; article_type: string; tags: string[]; view_count: number; }
+export interface Certificate { id: number; title: string; event_name: string; verification_code: string; issued_at: string; }
+export interface CertificateVerify { valid: boolean; title?: string; recipient?: string; event_name?: string; issued_at?: string; }
+export interface ClubEvent { id: number; title: string; slug: string; description: string; event_type: string; start_time: string; end_time: string; location: string; is_public: boolean; }
+export interface EventRegistration { id: number; event: number; user: number; attended: boolean; }
+export interface GamificationProfile { id: number; xp: number; level: number; tasks_completed: number; user_detail?: User; badges?: Badge[]; }
+export interface Badge { id: number; name: string; slug: string; description: string; icon: string; xp_required: number; }
+export interface Achievement { id: number; title: string; description: string; xp_awarded: number; awarded_at: string; }
+export interface Channel { id: number; name: string; slug: string; description: string; }
+export interface ChannelMessage { id: number; content: string; author_detail?: User; created_at: string; }
+export interface DirectMessage { id: number; content: string; sender_detail?: User; recipient_detail?: User; is_read: boolean; created_at: string; }
+export interface AiInsight { id: number; insight_type: string; title: string; content: string; created_at: string; }
+export interface CalendarEvent { id: string; type: string; title: string; start: string; end: string; color: string; }
+export interface SearchResult { query: string; count: number; results: { type: string; id: number; title: string; subtitle: string; url: string }[]; }
+export interface AnalyticsDashboard {
+  members: number; daily_updates_this_week: number; attendance_rate: number; avg_task_hours: number;
+  tasks_by_status: { status: string; count: number }[];
+  projects_by_health: { health: string; count: number }[];
+  department_stats: { name: string; teams: number; projects: number }[];
+}
+export interface TrendPoint { date: string; updates: number; tasks_completed: number; }
+export interface Organization { id: number; name: string; slug: string; description: string; website: string; }
+export interface ComplianceStats { date: string; total_members: number; submitted: number; compliance_rate: number; }
+export interface AuditLog { id: number; action: string; resource: string; user_name: string; created_at: string; }
