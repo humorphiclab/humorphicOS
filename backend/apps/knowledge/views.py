@@ -2,11 +2,15 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import KnowledgeArticle
 from .serializers import KnowledgeArticleSerializer
 
 
-class KnowledgeArticleViewSet(viewsets.ModelViewSet):
+class KnowledgeArticleViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "knowledge"
+    rbac_action_map = {"view": "read"}
     queryset = KnowledgeArticle.objects.select_related("author", "department", "project").filter(is_published=True)
     serializer_class = KnowledgeArticleSerializer
     search_fields = ("title", "content", "tags")

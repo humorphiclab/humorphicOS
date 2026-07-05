@@ -3,14 +3,21 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import Organization, OrganizationMember
 from .serializers import OrganizationMemberSerializer, OrganizationSerializer
 
 
-class OrganizationViewSet(viewsets.ModelViewSet):
+class OrganizationViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "organizations"
+    rbac_action_map = {"public": "read", "members": "manage"}
     queryset = Organization.objects.select_related("owner").filter(is_active=True)
     serializer_class = OrganizationSerializer
     lookup_field = "slug"
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
     @action(detail=False, methods=["get"], permission_classes=[AllowAny])
     def public(self, request):

@@ -2,11 +2,14 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import Milestone, Project
 from .serializers import MilestoneSerializer, ProjectDetailSerializer, ProjectListSerializer
 
 
-class ProjectViewSet(viewsets.ModelViewSet):
+class ProjectViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "projects"
     queryset = Project.objects.select_related("owner", "team", "department").prefetch_related(
         "milestones", "members"
     )

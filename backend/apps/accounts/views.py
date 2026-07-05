@@ -6,9 +6,11 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import AuditLog, Role, User
+from .permissions import HasResourcePermission, IsLeadership
 from .serializers import (
     AuditLogSerializer,
     ChangePasswordSerializer,
+    RoleSerializer,
     UserCreateSerializer,
     UserDetailSerializer,
     UserListSerializer,
@@ -88,11 +90,74 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserListSerializer
     search_fields = ("first_name", "last_name", "email", "college", "branch")
     filterset_fields = ("role", "year", "branch")
+    permission_classes = [permissions.IsAuthenticated, HasResourcePermission]
+    rbac_resource = "users"
 
 
 class UserDetailView(generics.RetrieveAPIView):
     queryset = User.objects.select_related("role")
     serializer_class = UserDetailSerializer
+    permission_classes = [permissions.IsAuthenticated, HasResourcePermission]
+    rbac_resource = "users"
+
+
+class UserRoleUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsLeadership]
+
+    def patch(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, is_active=True)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=404)
+        role_id = request.data.get("role")
+        if not role_id:
+            return Response({"detail": "role is required."}, status=400)
+        try:
+            role = Role.objects.get(pk=role_id)
+        except Role.DoesNotExist:
+            return Response({"detail": "Invalid role."}, status=400)
+        user.role = role
+        user.save(update_fields=["role"])
+        return Response(UserDetailSerializer(user).data)
+
+
+class RolesListView(generics.ListAPIView):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [permissions.IsAuthenticated, IsLeadership]
+
+
+class PermissionsView(APIView):
+    def get(self, request):
+        user = request.user
+        if user.is_superuser:
+            perms = [{"resource": "*", "action": "*"}]
+        elif user.role:
+            perms = list(
+                user.role.permissions.values("resource", "action")
+            )
+        else:
+            perms = []
+        return Response({
+            "role": RoleSerializer(user.role).data if user.role else None,
+            "permissions": perms,
+            "is_leadership": bool(getattr(user.role, "is_leadership", False) or user.is_superuser),
+        })
+
+
+class AuditLogListView(generics.ListAPIView):
+    serializer_class = AuditLogSerializer
+    permission_classes = [permissions.IsAuthenticated, HasResourcePermission]
+    rbac_resource = "settings"
+    rbac_action = "read"
+
+    def get_queryset(self):
+        qs = AuditLog.objects.select_related("user").all()
+        if not self.request.user.is_superuser and not getattr(
+            self.request.user.role, "is_leadership", False
+        ):
+            qs = qs.filter(user=self.request.user)
+        return qs[:200]
 
 
 class DashboardStatsView(APIView):
@@ -214,13 +279,3 @@ class AuthConfigView(APIView):
             "google_enabled": bool(settings.GOOGLE_CLIENT_ID),
             "google_client_id": settings.GOOGLE_CLIENT_ID or None,
         })
-
-
-class AuditLogListView(generics.ListAPIView):
-    serializer_class = AuditLogSerializer
-
-    def get_queryset(self):
-        qs = AuditLog.objects.select_related("user").all()
-        if not self.request.user.is_superuser:
-            qs = qs.filter(user=self.request.user)
-        return qs[:100]

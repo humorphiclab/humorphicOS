@@ -11,6 +11,8 @@ class HasResourcePermission(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         resource = getattr(view, "rbac_resource", self.resource) or self.resource
+        if not resource:
+            return True
         action_map = {
             "GET": "read",
             "HEAD": "read",
@@ -20,7 +22,14 @@ class HasResourcePermission(BasePermission):
             "PATCH": "update",
             "DELETE": "delete",
         }
-        action = getattr(view, "rbac_action", None) or action_map.get(request.method, self.action)
+        action_overrides = getattr(view, "rbac_action_map", {})
+        view_action = getattr(view, "action", None)
+        if view_action and view_action in action_overrides:
+            action = action_overrides[view_action]
+        elif getattr(view, "rbac_action", None):
+            action = view.rbac_action
+        else:
+            action = action_map.get(request.method, self.action)
         if request.user.is_superuser:
             return True
         return request.user.has_permission(resource, action)

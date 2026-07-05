@@ -17,8 +17,13 @@ DEFAULT_ROLES = [
 LEADERSHIP_RESOURCES = [
     "users", "departments", "teams", "projects", "tasks",
     "meetings", "reports", "announcements", "settings",
+    "attendance", "inventory", "knowledge", "certificates",
+    "events", "chat", "organizations", "analytics",
 ]
-MEMBER_RESOURCES = ["tasks", "daily_updates", "meetings", "projects"]
+MEMBER_RESOURCES = [
+    "tasks", "daily_updates", "meetings", "projects",
+    "attendance", "inventory", "knowledge", "events", "chat", "settings",
+]
 LEADERSHIP_ACTIONS = ["create", "read", "update", "delete", "approve", "assign", "export", "manage"]
 MEMBER_ACTIONS = ["create", "read", "update"]
 

@@ -3,11 +3,15 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import Event, EventRegistration
 from .serializers import EventRegistrationSerializer, EventSerializer
 
 
-class EventViewSet(viewsets.ModelViewSet):
+class EventViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "events"
+    rbac_action_map = {"register": "create", "feedback": "update"}
     queryset = Event.objects.select_related("organizer").filter(is_active=True)
     serializer_class = EventSerializer
     search_fields = ("title", "description")
@@ -40,7 +44,8 @@ class EventViewSet(viewsets.ModelViewSet):
         return Response(EventRegistrationSerializer(reg).data)
 
 
-class EventRegistrationViewSet(viewsets.ReadOnlyModelViewSet):
+class EventRegistrationViewSet(RBACMixin, viewsets.ReadOnlyModelViewSet):
+    rbac_resource = "events"
     serializer_class = EventRegistrationSerializer
     filterset_fields = ("event", "user")
 

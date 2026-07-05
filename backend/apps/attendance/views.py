@@ -2,22 +2,33 @@ import secrets
 from datetime import date
 
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import IsLeadership
+from apps.accounts.rbac import RBACMixin
 
 from .models import AttendanceRecord, Holiday, LeaveRequest
 from .serializers import AttendanceRecordSerializer, HolidaySerializer, LeaveRequestSerializer
 
 
-class HolidayViewSet(viewsets.ModelViewSet):
+class HolidayViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "attendance"
     queryset = Holiday.objects.all()
     serializer_class = HolidaySerializer
 
 
-class AttendanceRecordViewSet(viewsets.ModelViewSet):
+class AttendanceRecordViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "attendance"
+    rbac_action_map = {
+        "mark": "create",
+        "generate_qr": "manage",
+        "scan_qr": "create",
+        "face_checkin": "create",
+        "analytics": "read",
+    }
     serializer_class = AttendanceRecordSerializer
     filterset_fields = ("date", "status", "user", "method")
 
@@ -42,7 +53,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         )
         return Response(AttendanceRecordSerializer(record).data)
 
-    @action(detail=False, methods=["get"], permission_classes=[IsLeadership])
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated, IsLeadership])
     def generate_qr(self, request):
         token = secrets.token_urlsafe(32)
         request.session["attendance_qr_token"] = token
@@ -97,7 +108,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return Response({"total": total, "by_status": list(stats)})
 
 
-class LeaveRequestViewSet(viewsets.ModelViewSet):
+class LeaveRequestViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "attendance"
+    rbac_action_map = {"approve": "approve", "reject": "approve"}
     serializer_class = LeaveRequestSerializer
     filterset_fields = ("status", "user", "leave_type")
 
@@ -108,7 +121,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return qs
         return qs.filter(user=user)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsLeadership])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeadership])
     def approve(self, request, pk=None):
         leave = self.get_object()
         leave.status = LeaveRequest.Status.APPROVED
@@ -116,7 +129,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         leave.save()
         return Response(LeaveRequestSerializer(leave).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsLeadership])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeadership])
     def reject(self, request, pk=None):
         leave = self.get_object()
         leave.status = LeaveRequest.Status.REJECTED

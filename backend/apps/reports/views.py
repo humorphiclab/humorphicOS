@@ -6,16 +6,33 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
 from apps.daily_updates.models import DailyUpdate
 from apps.tasks.models import Task
 
 from .models import Report
 from .pdf import generate_report_pdf
 from .serializers import ReportSerializer
-from .services import generate_daily_report, generate_weekly_report
+from .services import (
+    generate_attendance_report,
+    generate_daily_report,
+    generate_performance_report,
+    generate_project_report,
+    generate_weekly_report,
+)
 
 
-class ReportViewSet(viewsets.ReadOnlyModelViewSet):
+class ReportViewSet(RBACMixin, viewsets.ReadOnlyModelViewSet):
+    rbac_resource = "reports"
+    rbac_action_map = {
+        "generate_daily": "export",
+        "generate_weekly": "export",
+        "generate_attendance": "export",
+        "generate_project": "export",
+        "generate_performance": "export",
+        "leadership_summary": "read",
+        "export": "export",
+    }
     queryset = Report.objects.select_related("generated_by")
     serializer_class = ReportSerializer
     filterset_fields = ("report_type",)
@@ -28,6 +45,21 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["post"])
     def generate_weekly(self, request):
         report = generate_weekly_report(request.user)
+        return Response(ReportSerializer(report).data, status=201)
+
+    @action(detail=False, methods=["post"])
+    def generate_attendance(self, request):
+        report = generate_attendance_report(request.user)
+        return Response(ReportSerializer(report).data, status=201)
+
+    @action(detail=False, methods=["post"])
+    def generate_project(self, request):
+        report = generate_project_report(request.user)
+        return Response(ReportSerializer(report).data, status=201)
+
+    @action(detail=False, methods=["post"])
+    def generate_performance(self, request):
+        report = generate_performance_report(request.user)
         return Response(ReportSerializer(report).data, status=201)
 
     @action(detail=False, methods=["get"])

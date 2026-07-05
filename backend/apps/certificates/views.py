@@ -3,16 +3,20 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import Certificate, CertificateTemplate
 from .serializers import CertificateSerializer, CertificateTemplateSerializer
 
 
-class CertificateTemplateViewSet(viewsets.ModelViewSet):
+class CertificateTemplateViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "certificates"
     queryset = CertificateTemplate.objects.filter(is_active=True)
     serializer_class = CertificateTemplateSerializer
 
 
-class CertificateViewSet(viewsets.ModelViewSet):
+class CertificateViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "certificates"
     queryset = Certificate.objects.select_related("recipient", "template", "issued_by")
     serializer_class = CertificateSerializer
     filterset_fields = ("recipient", "template")

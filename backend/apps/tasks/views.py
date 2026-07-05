@@ -3,11 +3,20 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import Task, TaskComment
 from .serializers import TaskCommentCreateSerializer, TaskCommentSerializer, TaskSerializer
 
 
-class TaskViewSet(viewsets.ModelViewSet):
+class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "tasks"
+    rbac_action_map = {
+        "comments": "update",
+        "status": "update",
+        "my_tasks": "read",
+        "kanban": "read",
+    }
     queryset = Task.objects.select_related(
         "assignee", "assigned_by", "project"
     ).prefetch_related("subtasks", "comments")

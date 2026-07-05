@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "drf_spectacular",
+    "storages",
     "apps.accounts",
     "apps.organizations",
     "apps.departments",
@@ -192,3 +193,28 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@humorphic.local"
 SESSION_COOKIE_AGE = 86400
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+USE_S3 = env.bool("USE_S3", default=False)
+MINIO_ENDPOINT = env("MINIO_ENDPOINT", default="")
+MINIO_ACCESS_KEY = env("MINIO_ACCESS_KEY", default="minioadmin")
+MINIO_SECRET_KEY = env("MINIO_SECRET_KEY", default="minioadmin")
+MINIO_BUCKET = env("MINIO_BUCKET", default="humorphic")
+
+if USE_S3 and MINIO_ENDPOINT:
+    endpoint = MINIO_ENDPOINT if MINIO_ENDPOINT.startswith("http") else f"http://{MINIO_ENDPOINT}"
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": MINIO_ACCESS_KEY,
+                "secret_key": MINIO_SECRET_KEY,
+                "bucket_name": MINIO_BUCKET,
+                "endpoint_url": endpoint,
+                "default_acl": "public-read",
+                "file_overwrite": False,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }

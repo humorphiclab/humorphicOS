@@ -3,11 +3,16 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.permissions import IsLeadership
+from apps.accounts.rbac import RBACMixin
+
 from .models import DailyUpdate
 from .serializers import DailyUpdateSerializer
 
 
-class DailyUpdateViewSet(viewsets.ModelViewSet):
+class DailyUpdateViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "daily_updates"
+    rbac_action_map = {"compliance": "read", "today": "read"}
     queryset = DailyUpdate.objects.select_related("user", "project")
     serializer_class = DailyUpdateSerializer
     filterset_fields = ("date", "project", "user")
@@ -28,7 +33,7 @@ class DailyUpdateViewSet(viewsets.ModelViewSet):
             return Response(DailyUpdateSerializer(update).data)
         return Response(None)
 
-    @action(detail=False, methods=["get"])
+    @action(detail=False, methods=["get"], permission_classes=[IsLeadership])
     def compliance(self, request):
         """Leadership view: members who submitted today's update."""
         from apps.accounts.models import User

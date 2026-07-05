@@ -130,6 +130,15 @@ export const authApi = {
     }),
   config: () => apiFetch<{ google_enabled: boolean; google_client_id: string | null }>("/auth/config/"),
   me: () => apiFetch<User>("/auth/me/"),
+  updateMe: (data: Partial<User>) =>
+    apiFetch<User>("/auth/me/", { method: "PATCH", body: JSON.stringify(data) }),
+  permissions: () => apiFetch<PermissionsPayload>("/auth/permissions/"),
+  roles: () => list<Role>("/auth/roles/"),
+  updateUserRole: (userId: number, roleId: number) =>
+    apiFetch<User>(`/auth/users/${userId}/role/`, {
+      method: "PATCH",
+      body: JSON.stringify({ role: roleId }),
+    }),
   dashboard: () => apiFetch<DashboardStats>("/auth/dashboard/"),
   users: () => list<User>("/auth/users/"),
   auditLogs: () => list<AuditLog>("/auth/audit-logs/"),
@@ -147,9 +156,21 @@ export const tasksApi = {
     apiFetch<Record<string, Task[]>>(`/tasks/kanban/${project ? `?project=${project}` : ""}`),
 };
 
-export const projectsApi = { list: () => list<Project>("/projects/") };
-export const departmentsApi = { list: () => list<Department>("/departments/") };
-export const teamsApi = { list: () => list<Team>("/teams/") };
+export const projectsApi = {
+  list: () => list<Project>("/projects/"),
+  create: (data: Partial<Project>) =>
+    apiFetch<Project>("/projects/", { method: "POST", body: JSON.stringify(data) }),
+};
+export const departmentsApi = {
+  list: () => list<Department>("/departments/"),
+  create: (data: Partial<Department>) =>
+    apiFetch<Department>("/departments/", { method: "POST", body: JSON.stringify(data) }),
+};
+export const teamsApi = {
+  list: () => list<Team>("/teams/"),
+  create: (data: Partial<Team>) =>
+    apiFetch<Team>("/teams/", { method: "POST", body: JSON.stringify(data) }),
+};
 
 export const dailyUpdatesApi = {
   today: () => apiFetch<DailyUpdate | null>("/daily-updates/today/"),
@@ -161,9 +182,20 @@ export const dailyUpdatesApi = {
 export const meetingsApi = {
   list: () => list<Meeting>("/meetings/"),
   upcoming: () => apiFetch<Meeting[]>("/meetings/upcoming/"),
+  create: (data: Partial<Meeting>) =>
+    apiFetch<Meeting>("/meetings/", { method: "POST", body: JSON.stringify(data) }),
+  markAttendance: (meetingId: number, userId?: number, status = "present") =>
+    apiFetch(`/meetings/${meetingId}/attendance/`, {
+      method: "POST",
+      body: JSON.stringify({ user: userId, status }),
+    }),
 };
 
-export const announcementsApi = { list: () => list<Announcement>("/announcements/") };
+export const announcementsApi = {
+  list: () => list<Announcement>("/announcements/"),
+  create: (data: Partial<Announcement>) =>
+    apiFetch<Announcement>("/announcements/", { method: "POST", body: JSON.stringify(data) }),
+};
 
 export const notificationsApi = {
   list: () => list<Notification>("/notifications/"),
@@ -175,9 +207,26 @@ export const reportsApi = {
   list: () => list<Report>("/reports/"),
   generateDaily: () => apiFetch<Report>("/reports/generate_daily/", { method: "POST" }),
   generateWeekly: () => apiFetch<Report>("/reports/generate_weekly/", { method: "POST" }),
+  generateAttendance: () => apiFetch<Report>("/reports/generate_attendance/", { method: "POST" }),
+  generateProject: () => apiFetch<Report>("/reports/generate_project/", { method: "POST" }),
+  generatePerformance: () => apiFetch<Report>("/reports/generate_performance/", { method: "POST" }),
   leadershipSummary: () => apiFetch<Record<string, unknown>>("/reports/leadership_summary/"),
-  exportReport: (id: number, format: "json" | "csv" = "json") =>
+  exportReport: (id: number, format: "json" | "csv" | "pdf" = "json") =>
     apiFetch<Report>(`/reports/${id}/export/?format=${format}`),
+  downloadReport: async (id: number, format: "pdf" | "csv" = "pdf") => {
+    const tokens = getStoredTokens();
+    const res = await fetch(`${API_URL}/reports/${id}/export/?format=${format}`, {
+      headers: tokens?.access ? { Authorization: `Bearer ${tokens.access}` } : {},
+    });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report-${id}.${format}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ── Phase 2 ──
@@ -189,6 +238,10 @@ export const attendanceApi = {
   leaves: () => list<LeaveRequest>("/attendance/leaves/"),
   requestLeave: (data: Partial<LeaveRequest>) =>
     apiFetch<LeaveRequest>("/attendance/leaves/", { method: "POST", body: JSON.stringify(data) }),
+  approveLeave: (id: number) =>
+    apiFetch<LeaveRequest>(`/attendance/leaves/${id}/approve/`, { method: "POST" }),
+  rejectLeave: (id: number) =>
+    apiFetch<LeaveRequest>(`/attendance/leaves/${id}/reject/`, { method: "POST" }),
 };
 
 export const inventoryApi = {
@@ -196,14 +249,20 @@ export const inventoryApi = {
   lowStock: () => apiFetch<Component[]>("/inventory/components/low_stock/"),
   equipment: () => list<Equipment>("/inventory/equipment/"),
   labBookings: () => list<LabBooking>("/inventory/lab-bookings/"),
+  createLabBooking: (data: Partial<LabBooking>) =>
+    apiFetch<LabBooking>("/inventory/lab-bookings/", { method: "POST", body: JSON.stringify(data) }),
 };
 
 export const knowledgeApi = {
   list: () => list<KnowledgeArticle>("/knowledge/"),
+  create: (data: Partial<KnowledgeArticle>) =>
+    apiFetch<KnowledgeArticle>("/knowledge/", { method: "POST", body: JSON.stringify(data) }),
 };
 
 export const certificatesApi = {
   list: () => list<Certificate>("/certificates/"),
+  create: (data: { recipient: number; title: string; event_name: string; template?: number }) =>
+    apiFetch<Certificate>("/certificates/", { method: "POST", body: JSON.stringify(data) }),
   verify: (code: string) => apiFetch<CertificateVerify>(`/certificates/verify/?code=${code}`),
 };
 
@@ -218,6 +277,13 @@ export const eventsApi = {
 
 export const organizationsApi = {
   list: () => list<Organization>("/organizations/"),
+  create: (data: Partial<Organization>) =>
+    apiFetch<Organization>("/organizations/", { method: "POST", body: JSON.stringify(data) }),
+  addMember: (slug: string, userId: number, org_role = "member") =>
+    apiFetch(`/organizations/${slug}/members/`, {
+      method: "POST",
+      body: JSON.stringify({ user: userId, org_role }),
+    }),
   public: () => publicFetch<Organization[]>("/organizations/public/"),
 };
 
@@ -243,6 +309,7 @@ export const chatApi = {
     }),
   dmConversation: (userId: number) =>
     apiFetch<DirectMessage[]>(`/chat/direct/conversation/?user=${userId}`),
+  dmContacts: () => list<User>("/auth/users/"),
 };
 
 // ── Phase 3 ──
@@ -276,6 +343,12 @@ export const analyticsApi = {
 };
 
 // ── Types ──
+export interface Role { id: number; name: string; slug: string; is_leadership: boolean; }
+export interface PermissionsPayload {
+  role: Role | null;
+  permissions: { resource: string; action: string }[];
+  is_leadership: boolean;
+}
 export interface Task {
   id: number; title: string; description: string; status: string; priority: string;
   due_date: string | null; assignee_detail?: User; project_detail?: Project;

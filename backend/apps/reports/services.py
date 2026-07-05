@@ -1,8 +1,11 @@
 from datetime import timedelta
 
+from django.db.models import Avg, Count
 from django.utils import timezone
 
+from apps.attendance.models import AttendanceRecord
 from apps.daily_updates.models import DailyUpdate
+from apps.projects.models import Project
 from apps.tasks.models import Task
 
 from .models import Report
@@ -59,5 +62,96 @@ def generate_weekly_report(user):
         generated_by=user,
         period_start=week_start,
         period_end=week_end,
+        data=data,
+    )
+
+
+def generate_attendance_report(user):
+    today = timezone.now().date()
+    month_start = today.replace(day=1)
+    records = AttendanceRecord.objects.filter(date__gte=month_start).select_related("user")
+    by_status = list(records.values("status").annotate(count=Count("id")))
+    by_method = list(records.values("method").annotate(count=Count("id")))
+
+    data = {
+        "period_start": str(month_start),
+        "period_end": str(today),
+        "total_records": records.count(),
+        "by_status": by_status,
+        "by_method": by_method,
+        "unique_members": records.values("user").distinct().count(),
+    }
+
+    return Report.objects.create(
+        title=f"Attendance Report - {month_start.strftime('%B %Y')}",
+        report_type=Report.ReportType.ATTENDANCE,
+        generated_by=user,
+        period_start=month_start,
+        period_end=today,
+        data=data,
+    )
+
+
+def generate_project_report(user):
+    today = timezone.now().date()
+    projects = Project.objects.select_related("owner", "department").prefetch_related("milestones")
+    project_data = []
+    for p in projects:
+        project_data.append({
+            "title": p.title,
+            "status": p.status,
+            "health": p.health,
+            "completion": p.completion_percentage,
+            "milestones_total": p.milestones.count(),
+            "milestones_done": p.milestones.filter(is_completed=True).count(),
+        })
+
+    data = {
+        "generated_on": str(today),
+        "total_projects": projects.count(),
+        "by_health": list(projects.values("health").annotate(count=Count("id"))),
+        "by_status": list(projects.values("status").annotate(count=Count("id"))),
+        "projects": project_data[:30],
+    }
+
+    return Report.objects.create(
+        title=f"Project Report - {today}",
+        report_type=Report.ReportType.PROJECT,
+        generated_by=user,
+        period_start=today,
+        period_end=today,
+        data=data,
+    )
+
+
+def generate_performance_report(user):
+    today = timezone.now().date()
+    month_start = today.replace(day=1)
+    tasks = Task.objects.filter(updated_at__date__gte=month_start)
+    updates = DailyUpdate.objects.filter(date__gte=month_start)
+
+    data = {
+        "period_start": str(month_start),
+        "period_end": str(today),
+        "tasks_completed": tasks.filter(status=Task.Status.DONE).count(),
+        "tasks_overdue": tasks.filter(
+            due_date__lt=today,
+            status__in=[Task.Status.TODO, Task.Status.IN_PROGRESS],
+        ).count(),
+        "avg_hours_logged": float(tasks.aggregate(a=Avg("hours_logged"))["a"] or 0),
+        "daily_updates": updates.count(),
+        "top_contributors": list(
+            updates.values("user__first_name", "user__last_name")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:10]
+        ),
+    }
+
+    return Report.objects.create(
+        title=f"Performance Report - {month_start.strftime('%B %Y')}",
+        report_type=Report.ReportType.PERFORMANCE,
+        generated_by=user,
+        period_start=month_start,
+        period_end=today,
         data=data,
     )

@@ -3,11 +3,15 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.accounts.rbac import RBACMixin
+
 from .models import Channel, ChannelMessage, DirectMessage
 from .serializers import ChannelMessageSerializer, ChannelSerializer, DirectMessageSerializer
 
 
-class ChannelViewSet(viewsets.ModelViewSet):
+class ChannelViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "chat"
+    rbac_action_map = {"messages": "create"}
     queryset = Channel.objects.select_related("created_by", "team", "department").prefetch_related("members")
     serializer_class = ChannelSerializer
     lookup_field = "slug"
@@ -32,7 +36,9 @@ class ChannelViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=201)
 
 
-class DirectMessageViewSet(viewsets.ModelViewSet):
+class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "chat"
+    rbac_action_map = {"conversation": "read"}
     serializer_class = DirectMessageSerializer
     http_method_names = ["get", "post", "patch"]
 
