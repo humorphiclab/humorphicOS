@@ -70,9 +70,25 @@ export default function ReportsPage() {
             <h3 className="font-semibold mb-4">Generated Reports</h3>
             <ul className="space-y-2">
               {reports!.map((r) => (
-                <li key={r.id} className="flex justify-between text-sm border-b border-card-border pb-2">
+                <li key={r.id} className="flex justify-between items-center text-sm border-b border-card-border pb-2">
                   <span>{r.title}</span>
-                  <span className="text-muted capitalize">{r.report_type}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted capitalize">{r.report_type}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(r.data, null, 2)], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `report-${r.id}.json`;
+                        a.click();
+                      }}
+                    >
+                      Export
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>

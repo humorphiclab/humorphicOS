@@ -9,15 +9,18 @@ from .models import Achievement, UserProfile
 
 @receiver(post_save, sender=Task)
 def award_task_xp(sender, instance, **kwargs):
-    if instance.status != Task.Status.DONE or not instance.assignee:
+    if instance.status != Task.Status.DONE or not instance.assignee or not instance.completed_at:
+        return
+    if Achievement.objects.filter(user=instance.assignee, title=f"Task: {instance.title}").exists():
         return
     profile, _ = UserProfile.objects.get_or_create(user=instance.assignee)
     profile.tasks_completed += 1
     profile.add_xp(25)
-    Achievement.objects.get_or_create(
+    Achievement.objects.create(
         user=instance.assignee,
-        title="Task Completed",
-        defaults={"description": instance.title, "xp_awarded": 25},
+        title=f"Task: {instance.title}",
+        description="Completed a task",
+        xp_awarded=25,
     )
 
 

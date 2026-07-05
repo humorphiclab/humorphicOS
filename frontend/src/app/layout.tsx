@@ -16,6 +16,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "HumorphicOS",
   description: "AI-powered operating system for robotics clubs",
+  manifest: "/manifest.json",
+  appleWebApp: { capable: true, title: "HumorphicOS" },
 };
 
 export default function RootLayout({

@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { GoogleSignIn } from "@/components/auth/google-sign-in";
 import { authApi, setStoredTokens, setStoredUser } from "@/lib/api";
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,20 +18,28 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const finishLogin = async (loginFn: () => Promise<{ tokens: { access: string; refresh: string }; user: unknown }>) => {
     setError("");
     setLoading(true);
     try {
-      const { tokens, user } = await authApi.login(email, password);
+      const { tokens, user } = await loginFn();
       setStoredTokens(tokens);
-      setStoredUser(user);
+      setStoredUser(user as Parameters<typeof setStoredUser>[0]);
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    finishLogin(() => authApi.login(email, password));
+  };
+
+  const handleGoogle = (idToken: string) => {
+    finishLogin(() => authApi.googleLogin(idToken));
   };
 
   return (
@@ -42,10 +53,7 @@ export default function LoginPage() {
           <p className="text-muted mt-2">Sign in to your club workspace</p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-xl border border-card-border bg-card p-6 space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="rounded-xl border border-card-border bg-card p-6 space-y-4">
           {error && (
             <div className="rounded-lg bg-danger/10 border border-danger/30 px-3 py-2 text-sm text-danger">
               {error}
@@ -54,46 +62,36 @@ export default function LoginPage() {
 
           <div>
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@college.edu"
-              required
-            />
+            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@college.edu" required />
           </div>
 
           <div>
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in..." : "Sign in"}
           </Button>
 
-          <div className="relative my-2">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-card-border" /></div>
-            <div className="relative flex justify-center text-xs"><span className="bg-card px-2 text-muted">or</span></div>
-          </div>
-
-          <Button type="button" variant="secondary" className="w-full" onClick={() => alert("Set GOOGLE_CLIENT_ID in .env and integrate Google Sign-In SDK")}>
-            Continue with Google
-          </Button>
+          {GOOGLE_CLIENT_ID && (
+            <>
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-card-border" /></div>
+                <div className="relative flex justify-center text-xs"><span className="bg-card px-2 text-muted">or</span></div>
+              </div>
+              <GoogleSignIn clientId={GOOGLE_CLIENT_ID} onSuccess={handleGoogle} onError={() => setError("Google sign-in failed")} />
+            </>
+          )}
 
           <p className="text-center text-sm text-muted">
-            No account?{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              Register
-            </Link>
+            Demo: <span className="text-foreground">president@humorphic.club</span> / <span className="text-foreground">Demo@12345</span>
+          </p>
+
+          <p className="text-center text-sm text-muted">
+            No account? <Link href="/register" className="text-primary hover:underline">Register</Link>
+            {" · "}
+            <Link href="/portal" className="text-primary hover:underline">Public Portal</Link>
           </p>
         </form>
       </div>

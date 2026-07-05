@@ -43,9 +43,22 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
 
         daily_compliance = DailyUpdate.objects.filter(date=today).count()
 
-        return Response({
-            "date": today,
-            "week_start": week_start,
-            "tasks": task_stats,
-            "daily_updates_today": daily_compliance,
-        })
+    @action(detail=True, methods=["get"])
+    def export(self, request, pk=None):
+        report = self.get_object()
+        fmt = request.query_params.get("format", "json")
+        if fmt == "csv":
+            import csv
+            from django.http import HttpResponse
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = f'attachment; filename="report-{report.id}.csv"'
+            writer = csv.writer(response)
+            writer.writerow(["field", "value"])
+            writer.writerow(["title", report.title])
+            writer.writerow(["type", report.report_type])
+            writer.writerow(["period_start", report.period_start])
+            writer.writerow(["period_end", report.period_end])
+            for key, val in (report.data or {}).items():
+                writer.writerow([key, val])
+            return response
+        return Response(ReportSerializer(report).data)

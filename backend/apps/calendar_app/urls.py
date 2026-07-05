@@ -12,11 +12,13 @@ class CalendarView(APIView):
         from apps.events.models import Event
         from apps.attendance.models import Holiday, LeaveRequest
 
+        from datetime import date as date_cls
+
         start = request.query_params.get("start")
         end = request.query_params.get("end")
         today = timezone.now().date()
-        range_start = timezone.datetime.fromisoformat(start).date() if start else today - timedelta(days=30)
-        range_end = timezone.datetime.fromisoformat(end).date() if end else today + timedelta(days=60)
+        range_start = date_cls.fromisoformat(start[:10]) if start else today - timedelta(days=30)
+        range_end = date_cls.fromisoformat(end[:10]) if end else today + timedelta(days=60)
 
         events = []
         for m in Meeting.objects.filter(start_time__date__gte=range_start, start_time__date__lte=range_end):

@@ -29,6 +29,9 @@ export default function PublicPortalPage() {
           AI-powered platform for robotics clubs — manage projects, tasks, events, and member operations in one place.
         </p>
         <Link href="/register"><Button size="lg" className="gap-2">Join the Club <ArrowRight className="h-4 w-4" /></Button></Link>
+        <p className="mt-4 text-sm text-muted">
+          <Link href="/verify" className="text-primary hover:underline">Verify a certificate</Link>
+        </p>
       </main>
 
       <section className="max-w-4xl mx-auto px-6 pb-16 grid grid-cols-1 md:grid-cols-2 gap-8">

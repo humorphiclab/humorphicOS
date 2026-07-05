@@ -18,7 +18,7 @@ export default function ProjectsPage() {
     queryFn: projectsApi.list,
   });
 
-  const projects = data?.results ?? [];
+  const projects = data ?? [];
 
   return (
     <>

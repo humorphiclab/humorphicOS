@@ -1,20 +1,40 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { attendanceApi } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { attendanceApi, apiFetch, getStoredUser } from "@/lib/api";
 import { CheckCircle, QrCode } from "lucide-react";
 
 export default function AttendancePage() {
   const qc = useQueryClient();
+  const user = getStoredUser();
+  const isLead = user?.role?.is_leadership;
+  const [qrToken, setQrToken] = useState("");
+  const [generatedQr, setGeneratedQr] = useState<{ token: string; date: string } | null>(null);
+
   const { data: records, isLoading } = useQuery({ queryKey: ["attendance"], queryFn: attendanceApi.records });
   const { data: analytics } = useQuery({ queryKey: ["attendance-analytics"], queryFn: attendanceApi.analytics });
 
   const markMutation = useMutation({
     mutationFn: attendanceApi.mark,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+
+  const scanMutation = useMutation({
+    mutationFn: () => apiFetch("/attendance/records/scan_qr/", { method: "POST", body: JSON.stringify({ token: qrToken }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      setQrToken("");
+    },
+  });
+
+  const generateQr = useMutation({
+    mutationFn: () => apiFetch<{ token: string; date: string }>("/attendance/records/generate_qr/", { method: "GET" }),
+    onSuccess: (data) => setGeneratedQr(data),
   });
 
   return (
@@ -36,13 +56,31 @@ export default function AttendancePage() {
 
         <Card>
           <h3 className="font-semibold mb-4">Mark Today&apos;s Attendance</h3>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button onClick={() => markMutation.mutate()} disabled={markMutation.isPending} className="gap-2">
               <CheckCircle className="h-4 w-4" /> Manual Check-in
             </Button>
-            <Button variant="secondary" className="gap-2" disabled>
-              <QrCode className="h-4 w-4" /> QR Scan (Leadership generates QR)
-            </Button>
+          </div>
+        </Card>
+
+        {isLead && (
+          <Card>
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><QrCode className="h-4 w-4" /> QR Attendance (Leadership)</h3>
+            <Button size="sm" onClick={() => generateQr.mutate()} disabled={generateQr.isPending}>Generate QR Token</Button>
+            {generatedQr && (
+              <div className="mt-3 p-3 rounded-lg bg-primary/10 text-sm font-mono break-all">
+                Token: {generatedQr.token}<br />
+                Date: {generatedQr.date}
+              </div>
+            )}
+          </Card>
+        )}
+
+        <Card>
+          <h3 className="font-semibold mb-4">Scan QR Token</h3>
+          <div className="flex gap-2 max-w-md">
+            <Input placeholder="Paste QR token" value={qrToken} onChange={(e) => setQrToken(e.target.value)} />
+            <Button onClick={() => scanMutation.mutate()} disabled={!qrToken || scanMutation.isPending}>Scan</Button>
           </div>
         </Card>
 

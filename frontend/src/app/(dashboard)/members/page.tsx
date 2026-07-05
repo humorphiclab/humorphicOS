@@ -11,7 +11,7 @@ export default function MembersPage() {
     queryFn: membersApi.list,
   });
 
-  const members = data?.results ?? [];
+  const members = data ?? [];
 
   return (
     <>

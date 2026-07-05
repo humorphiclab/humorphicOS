@@ -9,10 +9,23 @@ from apps.projects.models import Project
 from apps.tasks.models import Task
 from apps.announcements.models import Announcement
 from apps.gamification.models import Badge, UserProfile
-from apps.inventory.models import Component
+from apps.inventory.models import Component, Equipment
 from apps.knowledge.models import KnowledgeArticle
 from apps.events.models import Event
 from apps.organizations.models import Organization, OrganizationMember
+from apps.meetings.models import Meeting
+from apps.attendance.models import Holiday
+from apps.chat.models import Channel
+from apps.certificates.models import CertificateTemplate
+
+
+DEPARTMENTS = [
+    ("AI", "ai"), ("Machine Learning", "ml"), ("Computer Vision", "cv"),
+    ("Embedded", "embedded"), ("Electronics", "electronics"), ("Mechanical", "mechanical"),
+    ("Research", "research"), ("Design", "design"), ("Marketing", "marketing"),
+    ("Management", "management"), ("Finance", "finance"), ("Documentation", "documentation"),
+    ("Media", "media"),
+]
 
 
 class Command(BaseCommand):
@@ -21,11 +34,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("Seeding demo data...")
 
-        depts = [
-            ("AI", "ai"), ("Machine Learning", "ml"), ("Computer Vision", "cv"),
-            ("Embedded", "embedded"), ("Electronics", "electronics"), ("Mechanical", "mechanical"),
-        ]
-        for name, slug in depts:
+        for name, slug in DEPARTMENTS:
             Department.objects.get_or_create(slug=slug, defaults={"name": name})
 
         admin, _ = User.objects.get_or_create(
@@ -81,10 +90,12 @@ class Command(BaseCommand):
         )
 
         Badge.objects.get_or_create(slug="first-task", defaults={"name": "First Task", "description": "Complete your first task", "xp_required": 10})
+        Badge.objects.get_or_create(slug="daily-streak", defaults={"name": "Daily Streak", "description": "Submit 7 daily updates", "xp_required": 70})
         UserProfile.objects.get_or_create(user=admin, defaults={"xp": 150, "level": 2, "tasks_completed": 5})
 
         Component.objects.get_or_create(sku="ESP32-001", defaults={"name": "ESP32 Dev Board", "category": "controller", "quantity": 12, "min_stock": 5, "location": "Lab A"})
         Component.objects.get_or_create(sku="HC-SR04", defaults={"name": "Ultrasonic Sensor HC-SR04", "category": "sensor", "quantity": 2, "min_stock": 5, "location": "Lab A"})
+        Equipment.objects.get_or_create(serial_number="ROVER-001", defaults={"name": "Autonomous Rover Prototype", "status": "in_use", "assigned_to": admin})
 
         KnowledgeArticle.objects.get_or_create(
             slug="getting-started-ros2",
@@ -97,6 +108,36 @@ class Command(BaseCommand):
                 "title": "Robotics Workshop 2026", "description": "Hands-on robotics workshop for new members.",
                 "event_type": "workshop", "organizer": admin, "start_time": timezone.now() + timedelta(days=14),
                 "end_time": timezone.now() + timedelta(days=14, hours=3), "location": "Lab Block A", "is_public": True,
+            },
+        )
+
+        Meeting.objects.get_or_create(
+            title="Weekly Club Sync",
+            defaults={
+                "organizer": admin,
+                "agenda": "Project updates, task assignments, and blockers.",
+                "meet_link": "https://meet.google.com/demo-link",
+                "start_time": timezone.now() + timedelta(days=2),
+                "end_time": timezone.now() + timedelta(days=2, hours=1),
+            },
+        )
+
+        Holiday.objects.get_or_create(
+            date=timezone.now().date().replace(month=8, day=15),
+            defaults={"name": "Independence Day", "description": "National holiday"},
+        )
+
+        channel, _ = Channel.objects.get_or_create(
+            slug="general",
+            defaults={"name": "general", "description": "General club discussion", "created_by": admin},
+        )
+        channel.members.add(admin)
+
+        CertificateTemplate.objects.get_or_create(
+            name="Workshop Participation",
+            defaults={
+                "template_type": "workshop",
+                "html_template": "<h1>Certificate of Participation</h1><p>{{name}} completed {{event}} on {{date}}</p>",
             },
         )
 

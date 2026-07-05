@@ -134,6 +134,10 @@ export const authApi = {
   auditLogs: () => list<AuditLog>("/auth/audit-logs/"),
 };
 
+export const membersApi = {
+  list: () => authApi.users(),
+};
+
 // ── Core ──
 export const tasksApi = {
   list: () => list<Task>("/tasks/"),
@@ -171,6 +175,8 @@ export const reportsApi = {
   generateDaily: () => apiFetch<Report>("/reports/generate_daily/", { method: "POST" }),
   generateWeekly: () => apiFetch<Report>("/reports/generate_weekly/", { method: "POST" }),
   leadershipSummary: () => apiFetch<Record<string, unknown>>("/reports/leadership_summary/"),
+  exportReport: (id: number, format: "json" | "csv" = "json") =>
+    apiFetch<Report>(`/reports/${id}/export/?format=${format}`),
 };
 
 // ── Phase 2 ──

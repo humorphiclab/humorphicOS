@@ -41,6 +41,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://humorphic:humorphic@db:5432/humorphic
+      REDIS_URL: redis://redis:6379/0
     command: >
       sh -c "python manage.py migrate &&
              python manage.py seed_roles &&
@@ -62,6 +65,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://humorphic:humorphic@db:5432/humorphic
+      REDIS_URL: redis://redis:6379/0
     command: celery -A humorphic worker -l info
     volumes:
       - ./backend:/app
@@ -75,6 +81,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://humorphic:humorphic@db:5432/humorphic
+      REDIS_URL: redis://redis:6379/0
     command: celery -A humorphic beat -l info
     volumes:
       - ./backend:/app
