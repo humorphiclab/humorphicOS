@@ -142,35 +142,61 @@ class GoogleLoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        token = request.data.get("id_token") or request.data.get("access_token")
-        if not token:
-            return Response({"detail": "Google token required."}, status=400)
+        id_token = request.data.get("id_token")
+        access_token = request.data.get("access_token")
+        if not id_token and not access_token:
+            return Response({"detail": "Google id_token or access_token required."}, status=400)
+
         try:
-            import urllib.request
             import json
-            url = f"https://oauth2.googleapis.com/tokeninfo?id_token={token}"
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                data = json.loads(resp.read())
+            import urllib.request
+
+            if id_token:
+                url = f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}"
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    data = json.loads(resp.read())
+            else:
+                req = urllib.request.Request(
+                    "https://www.googleapis.com/oauth2/v3/userinfo",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read())
         except Exception:
             return Response({"detail": "Invalid Google token."}, status=401)
 
-        if settings.GOOGLE_CLIENT_ID and data.get("aud") != settings.GOOGLE_CLIENT_ID:
+        client_id = settings.GOOGLE_CLIENT_ID
+        if client_id and id_token and data.get("aud") != client_id:
             return Response({"detail": "Token audience mismatch."}, status=401)
 
         email = data.get("email")
         if not email:
             return Response({"detail": "Email not provided by Google."}, status=400)
+        if data.get("email_verified") == "false":
+            return Response({"detail": "Google email is not verified."}, status=400)
 
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={
-                "username": email.split("@")[0][:30],
-                "first_name": data.get("given_name", ""),
-                "last_name": data.get("family_name", ""),
-                "is_email_verified": True,
-            },
-        )
-        if created:
+        user = User.objects.filter(email=email).first()
+        if user:
+            if not user.first_name and data.get("given_name"):
+                user.first_name = data.get("given_name", "")
+            if not user.last_name and data.get("family_name"):
+                user.last_name = data.get("family_name", "")
+            user.is_email_verified = True
+            user.save(update_fields=["first_name", "last_name", "is_email_verified"])
+        else:
+            base_username = email.split("@")[0][:20]
+            username = base_username
+            n = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{n}"[:30]
+                n += 1
+            user = User.objects.create(
+                email=email,
+                username=username,
+                first_name=data.get("given_name", ""),
+                last_name=data.get("family_name", ""),
+                is_email_verified=True,
+            )
             member_role = Role.objects.filter(slug=Role.Slug.MEMBER).first()
             if member_role:
                 user.role = member_role
@@ -178,6 +204,16 @@ class GoogleLoginView(APIView):
 
         tokens = get_tokens_for_user(user)
         return Response({"tokens": tokens, "user": UserDetailSerializer(user).data})
+
+
+class AuthConfigView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({
+            "google_enabled": bool(settings.GOOGLE_CLIENT_ID),
+            "google_client_id": settings.GOOGLE_CLIENT_ID or None,
+        })
 
 
 class AuditLogListView(generics.ListAPIView):

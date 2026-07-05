@@ -128,6 +128,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ id_token }),
     }),
+  config: () => apiFetch<{ google_enabled: boolean; google_client_id: string | null }>("/auth/config/"),
   me: () => apiFetch<User>("/auth/me/"),
   dashboard: () => apiFetch<DashboardStats>("/auth/dashboard/"),
   users: () => list<User>("/auth/users/"),

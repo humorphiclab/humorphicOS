@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -9,12 +10,13 @@ from apps.daily_updates.models import DailyUpdate
 from apps.tasks.models import Task
 
 from .models import Report
+from .pdf import generate_report_pdf
 from .serializers import ReportSerializer
 from .services import generate_daily_report, generate_weekly_report
 
 
 class ReportViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Report.objects.all()
+    queryset = Report.objects.select_related("generated_by")
     serializer_class = ReportSerializer
     filterset_fields = ("report_type",)
 
@@ -43,13 +45,28 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
 
         daily_compliance = DailyUpdate.objects.filter(date=today).count()
 
+        return Response({
+            "date": today,
+            "week_start": week_start,
+            "tasks": task_stats,
+            "daily_updates_today": daily_compliance,
+        })
+
     @action(detail=True, methods=["get"])
     def export(self, request, pk=None):
         report = self.get_object()
         fmt = request.query_params.get("format", "json")
+
+        if fmt == "pdf":
+            pdf_bytes = generate_report_pdf(report)
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            safe_name = report.title.replace(" ", "-").replace("/", "-")[:60]
+            response["Content-Disposition"] = f'attachment; filename="{safe_name}.pdf"'
+            return response
+
         if fmt == "csv":
             import csv
-            from django.http import HttpResponse
+
             response = HttpResponse(content_type="text/csv")
             response["Content-Disposition"] = f'attachment; filename="report-{report.id}.csv"'
             writer = csv.writer(response)
@@ -61,4 +78,5 @@ class ReportViewSet(viewsets.ReadOnlyModelViewSet):
             for key, val in (report.data or {}).items():
                 writer.writerow([key, val])
             return response
+
         return Response(ReportSerializer(report).data)
