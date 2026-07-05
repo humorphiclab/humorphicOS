@@ -182,7 +182,7 @@ FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 WHATSAPP_API_URL = env("WHATSAPP_API_URL", default="")
 WHATSAPP_API_TOKEN = env("WHATSAPP_API_TOKEN", default="")
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = True

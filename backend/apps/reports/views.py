@@ -20,6 +20,7 @@ from .services import (
     generate_project_report,
     generate_weekly_report,
 )
+from .tasks import send_daily_reminder, send_task_deadline_reminders
 
 
 class ReportViewSet(RBACMixin, viewsets.ReadOnlyModelViewSet):
@@ -32,6 +33,8 @@ class ReportViewSet(RBACMixin, viewsets.ReadOnlyModelViewSet):
         "generate_performance": "export",
         "leadership_summary": "read",
         "export": "export",
+        "trigger_daily_reminder": "export",
+        "trigger_deadline_reminder": "export",
     }
     queryset = Report.objects.select_related("generated_by")
     serializer_class = ReportSerializer
@@ -61,6 +64,16 @@ class ReportViewSet(RBACMixin, viewsets.ReadOnlyModelViewSet):
     def generate_performance(self, request):
         report = generate_performance_report(request.user)
         return Response(ReportSerializer(report).data, status=201)
+
+    @action(detail=False, methods=["post"])
+    def trigger_daily_reminder(self, request):
+        send_daily_reminder()
+        return Response({"detail": "Daily update reminder emails and notifications sent successfully."})
+
+    @action(detail=False, methods=["post"])
+    def trigger_deadline_reminder(self, request):
+        send_task_deadline_reminders()
+        return Response({"detail": "Task deadline reminder emails and notifications sent successfully."})
 
     @action(detail=False, methods=["get"])
     def leadership_summary(self, request):

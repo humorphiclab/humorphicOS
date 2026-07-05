@@ -31,8 +31,10 @@ def send_daily_reminder():
                 message=f"Hi {member.first_name},\n\nPlease submit your daily work update for {today}.",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[member.email],
-                fail_silently=True,
+                fail_silently=False,
             )
+        if member.phone and getattr(settings, "WHATSAPP_API_URL", ""):
+            send_whatsapp_reminder.delay(member.id, f"Hi {member.first_name}, please submit your daily work update for {today}.")
 
 
 @shared_task
@@ -79,4 +81,30 @@ def send_whatsapp_reminder(user_id: int, message: str):
     token = getattr(settings, "WHATSAPP_API_TOKEN", "")
     if not url or not token:
         return {"sent": False, "reason": "WhatsApp not configured"}
-    return {"sent": False, "reason": "WhatsApp API integration pending"}
+
+    try:
+        user = User.objects.get(id=user_id)
+        if not user.phone:
+            return {"sent": False, "reason": "User does not have a phone number"}
+
+        import urllib.request
+        import json
+
+        data = json.dumps({
+            "phone": user.phone,
+            "message": message
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return {"sent": True, "status": resp.status}
+    except Exception as e:
+        return {"sent": False, "reason": str(e)}

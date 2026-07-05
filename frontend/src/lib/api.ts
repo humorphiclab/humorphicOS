@@ -227,6 +227,8 @@ export const reportsApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  triggerDailyReminder: () => apiFetch<{ detail: string }>("/reports/trigger_daily_reminder/", { method: "POST" }),
+  triggerDeadlineReminder: () => apiFetch<{ detail: string }>("/reports/trigger_deadline_reminder/", { method: "POST" }),
 };
 
 // ── Phase 2 ──
@@ -242,6 +244,14 @@ export const attendanceApi = {
     apiFetch<LeaveRequest>(`/attendance/leaves/${id}/approve/`, { method: "POST" }),
   rejectLeave: (id: number) =>
     apiFetch<LeaveRequest>(`/attendance/leaves/${id}/reject/`, { method: "POST" }),
+  faceCheckin: (image: File) => {
+    const formData = new FormData();
+    formData.append("image", image);
+    return apiFetch<AttendanceRecord>("/attendance/records/face_checkin/", {
+      method: "POST",
+      body: formData,
+    });
+  },
 };
 
 export const inventoryApi = {
@@ -368,12 +378,12 @@ export interface Meeting {
 export interface Announcement { id: number; title: string; content: string; priority: string; is_pinned: boolean; created_at: string; }
 export interface Notification { id: number; title: string; message: string; notification_type: string; is_read: boolean; link: string; created_at: string; }
 export interface Report { id: number; title: string; report_type: string; data: Record<string, unknown>; created_at: string; }
-export interface AttendanceRecord { id: number; date: string; status: string; method: string; check_in: string | null; }
-export interface Holiday { id: number; name: string; date: string; }
-export interface LeaveRequest { id: number; leave_type: string; start_date: string; end_date: string; reason: string; status: string; }
+export interface AttendanceRecord { id: number; date: string; status: string; method: string; check_in: string | null; notes?: string; }
+export interface Holiday { id: number; name: string; date: string; description?: string; }
+export interface LeaveRequest { id: number; leave_type: string; start_date: string; end_date: string; reason: string; status: string; user_detail?: User; }
 export interface Component { id: number; name: string; sku: string; category: string; quantity: number; min_stock: number; location: string; is_low_stock?: boolean; }
 export interface Equipment { id: number; name: string; serial_number: string; status: string; }
-export interface LabBooking { id: number; lab_name: string; start_time: string; end_time: string; purpose: string; status: string; }
+export interface LabBooking { id: number; lab_name: string; start_time: string; end_time: string; purpose: string; status: string; booked_by_detail?: User; }
 export interface KnowledgeArticle { id: number; title: string; slug: string; content: string; article_type: string; tags: string[]; view_count: number; }
 export interface Certificate { id: number; title: string; event_name: string; verification_code: string; issued_at: string; }
 export interface CertificateVerify { valid: boolean; title?: string; recipient?: string; event_name?: string; issued_at?: string; }
