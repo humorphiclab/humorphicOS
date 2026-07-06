@@ -1,9 +1,15 @@
 from django.contrib.auth import authenticate
 from django.conf import settings
+from django.apps import apps as django_apps
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+import json
+import urllib.request
+from django.utils import timezone
+
+
 
 from .models import AuditLog, Role, User
 from .permissions import HasResourcePermission, IsLeadership
@@ -89,16 +95,16 @@ class UserListView(generics.ListAPIView):
     queryset = User.objects.select_related("role").filter(is_active=True)
     serializer_class = UserListSerializer
     search_fields = ("first_name", "last_name", "email", "college", "branch")
-    filterset_fields = ("role", "year", "branch")
-    permission_classes = [permissions.IsAuthenticated, HasResourcePermission]
-    rbac_resource = "users"
+    filterset_fields = ("role", "batch", "branch")
+    permission_classes = [permissions.IsAuthenticated]
+
 
 
 class UserDetailView(generics.RetrieveAPIView):
     queryset = User.objects.select_related("role")
     serializer_class = UserDetailSerializer
-    permission_classes = [permissions.IsAuthenticated, HasResourcePermission]
-    rbac_resource = "users"
+    permission_classes = [permissions.IsAuthenticated]
+
 
 
 class UserRoleUpdateView(APIView):
@@ -108,14 +114,14 @@ class UserRoleUpdateView(APIView):
         try:
             user = User.objects.get(pk=pk, is_active=True)
         except User.DoesNotExist:
-            return Response({"detail": "User not found."}, status=404)
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         role_id = request.data.get("role")
         if not role_id:
-            return Response({"detail": "role is required."}, status=400)
+            return Response({"detail": "role is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             role = Role.objects.get(pk=role_id)
         except Role.DoesNotExist:
-            return Response({"detail": "Invalid role."}, status=400)
+            return Response({"detail": "Invalid role."}, status=status.HTTP_400_BAD_REQUEST)
         user.role = role
         user.save(update_fields=["role"])
         return Response(UserDetailSerializer(user).data)
@@ -157,17 +163,17 @@ class AuditLogListView(generics.ListAPIView):
             self.request.user.role, "is_leadership", False
         ):
             qs = qs.filter(user=self.request.user)
-        return qs[:200]
+        return qs
 
 
 class DashboardStatsView(APIView):
     """Aggregated dashboard widgets for the current user."""
 
     def get(self, request):
-        from apps.tasks.models import Task
-        from apps.meetings.models import Meeting
-        from apps.daily_updates.models import DailyUpdate
-        from django.utils import timezone
+        Task = django_apps.get_model('tasks', 'Task')
+        Meeting = django_apps.get_model('meetings', 'Meeting')
+        DailyUpdate = django_apps.get_model('daily_updates', 'DailyUpdate')
+        Announcement = django_apps.get_model('announcements', 'Announcement')
 
         user = request.user
         today = timezone.now().date()
@@ -184,7 +190,6 @@ class DashboardStatsView(APIView):
 
         has_daily_update = DailyUpdate.objects.filter(user=user, date=today).exists()
 
-        from apps.announcements.models import Announcement
         announcements = Announcement.objects.filter(is_active=True).order_by("-created_at")[:5]
 
         return Response({
@@ -210,11 +215,9 @@ class GoogleLoginView(APIView):
         id_token = request.data.get("id_token")
         access_token = request.data.get("access_token")
         if not id_token and not access_token:
-            return Response({"detail": "Google id_token or access_token required."}, status=400)
+            return Response({"detail": "Google id_token or access_token required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            import json
-            import urllib.request
 
             if id_token:
                 url = f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}"
@@ -228,17 +231,17 @@ class GoogleLoginView(APIView):
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read())
         except Exception:
-            return Response({"detail": "Invalid Google token."}, status=401)
+            return Response({"detail": "Invalid Google token."}, status=status.HTTP_401_UNAUTHORIZED)
 
         client_id = settings.GOOGLE_CLIENT_ID
         if client_id and id_token and data.get("aud") != client_id:
-            return Response({"detail": "Token audience mismatch."}, status=401)
+            return Response({"detail": "Token audience mismatch."}, status=status.HTTP_401_UNAUTHORIZED)
 
         email = data.get("email")
         if not email:
-            return Response({"detail": "Email not provided by Google."}, status=400)
+            return Response({"detail": "Email not provided by Google."}, status=status.HTTP_400_BAD_REQUEST)
         if data.get("email_verified") == "false":
-            return Response({"detail": "Google email is not verified."}, status=400)
+            return Response({"detail": "Google email is not verified."}, status=status.HTTP_400_BAD_REQUEST)
 
         user = User.objects.filter(email=email).first()
         if user:

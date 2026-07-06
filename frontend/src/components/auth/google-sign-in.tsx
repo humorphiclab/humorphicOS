@@ -28,12 +28,18 @@ export function GoogleSignIn({ clientId, onSuccess, onError }: GoogleSignInProps
     if (!clientId || !ref.current) return;
 
     const init = () => {
-      window.google?.accounts.id.initialize({
-        client_id: clientId,
-        callback: (response: { credential: string }) => onSuccess(response.credential),
-      });
+      if (!window.google) return;
+      
+      if (!(window as any)._gsiInitialized) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: { credential: string }) => onSuccess(response.credential),
+        });
+        (window as any)._gsiInitialized = true;
+      }
+      
       if (ref.current) {
-        window.google?.accounts.id.renderButton(ref.current, {
+        window.google.accounts.id.renderButton(ref.current, {
           theme: "outline",
           size: "large",
           width: ref.current.offsetWidth || 320,

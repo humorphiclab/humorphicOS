@@ -1,20 +1,24 @@
 from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
 
 from apps.accounts.rbac import RBACMixin
 
-from .models import Milestone, Project
-from .serializers import MilestoneSerializer, ProjectDetailSerializer, ProjectListSerializer
+from .models import Project, ProjectPhase, SubStage, SubLevel
+from .serializers import (
+    ProjectDetailSerializer,
+    ProjectListSerializer,
+    ProjectPhaseSerializer,
+    SubLevelSerializer,
+    SubStageSerializer,
+)
 
 
 class ProjectViewSet(RBACMixin, viewsets.ModelViewSet):
     rbac_resource = "projects"
-    queryset = Project.objects.select_related("owner", "team", "department").prefetch_related(
-        "milestones", "members"
+    queryset = Project.objects.select_related("owner", "department").prefetch_related(
+        "phases__sub_stages__sub_levels", "members"
     )
     search_fields = ("title", "description")
-    filterset_fields = ("status", "health", "department", "team")
+    filterset_fields = ("status", "health", "department")
     lookup_field = "slug"
 
     def get_serializer_class(self):
@@ -22,12 +26,20 @@ class ProjectViewSet(RBACMixin, viewsets.ModelViewSet):
             return ProjectListSerializer
         return ProjectDetailSerializer
 
-    @action(detail=True, methods=["get", "post"])
-    def milestones(self, request, slug=None):
-        project = self.get_object()
-        if request.method == "GET":
-            return Response(MilestoneSerializer(project.milestones.all(), many=True).data)
-        serializer = MilestoneSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(project=project)
-        return Response(serializer.data, status=201)
+
+class ProjectPhaseViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "projects"
+    queryset = ProjectPhase.objects.all()
+    serializer_class = ProjectPhaseSerializer
+
+
+class SubStageViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "projects"
+    queryset = SubStage.objects.all()
+    serializer_class = SubStageSerializer
+
+
+class SubLevelViewSet(RBACMixin, viewsets.ModelViewSet):
+    rbac_resource = "projects"
+    queryset = SubLevel.objects.all()
+    serializer_class = SubLevelSerializer

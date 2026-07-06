@@ -7,3 +7,4 @@ from .models import Department
 class DepartmentAdmin(admin.ModelAdmin):
     list_display = ("name", "slug", "head", "is_active")
     prepopulated_fields = {"slug": ("name",)}
+    filter_horizontal = ("members",)

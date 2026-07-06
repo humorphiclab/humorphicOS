@@ -6,10 +6,12 @@ class Team(models.Model):
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=150, unique=True)
     description = models.TextField(blank=True)
-    department = models.ForeignKey(
-        "departments.Department",
+    project = models.ForeignKey(
+        "projects.Project",
         on_delete=models.CASCADE,
         related_name="teams",
+        null=True,
+        blank=True,
     )
     lead = models.ForeignKey(
         settings.AUTH_USER_MODEL,

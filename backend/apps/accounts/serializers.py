@@ -23,9 +23,9 @@ class UserListSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id", "email", "username", "first_name", "last_name", "full_name",
-            "phone", "avatar", "role", "college", "branch", "year", "skills",
+            "phone", "avatar", "role", "enrollment_number", "college", "branch", "batch", "skills",
             "linkedin", "github", "portfolio", "bio", "is_active", "last_active",
-            "date_joined",
+            "date_joined", "is_superuser",
         )
 
 
@@ -41,7 +41,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "email", "username", "password", "first_name", "last_name",
-            "phone", "college", "branch", "year",
+            "phone", "enrollment_number", "college", "branch", "batch",
+            "avatar", "skills", "linkedin", "github",
         )
 
     def create(self, validated_data):
@@ -60,7 +61,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "first_name", "last_name", "phone", "avatar", "college", "branch",
-            "year", "skills", "linkedin", "github", "portfolio", "bio",
+            "enrollment_number", "batch", "skills", "linkedin", "github", "portfolio", "bio",
         )
 
 

@@ -1,263 +1,417 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { projectsApi } from "@/lib/api";
-import { cn, formatDate } from "@/lib/utils";
-import { ArrowLeft, Calendar, User, Users, CheckSquare, Layers, Clock, Award, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const healthColors: Record<string, string> = {
-  on_track: "text-success bg-success/10 border-success/20",
-  at_risk: "text-warning bg-warning/10 border-warning/20",
-  off_track: "text-danger bg-danger/10 border-danger/20",
-};
-
-const statusColors: Record<string, string> = {
-  active: "bg-primary/15 text-primary border-primary/20",
-  completed: "bg-success/15 text-success border-success/20",
-  on_hold: "bg-warning/15 text-warning border-warning/20",
-  planning: "bg-muted/30 text-muted border-muted/40",
+  on_track: "text-success",
+  at_risk: "text-warning",
+  off_track: "text-danger",
 };
 
 export default function ProjectsPage() {
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-
-  const { data: projectsList, isLoading: listLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: projectsApi.list,
   });
 
-  const { data: projectDetails, isLoading: detailsLoading } = useQuery({
-    queryKey: ["project-details", selectedSlug],
-    queryFn: () => projectsApi.detail(selectedSlug!),
-    enabled: !!selectedSlug,
-  });
-
-  const projects = projectsList ?? [];
-
-  if (selectedSlug) {
-    return (
-      <>
-        <TopBar title={projectDetails?.title || "Project Details"} />
-        <div className="p-6 max-w-5xl space-y-6">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setSelectedSlug(null)}
-            className="gap-2 mb-2"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to Projects
-          </Button>
-
-          {detailsLoading ? (
-            <div className="p-8 text-center text-muted text-sm">
-              Loading project details...
-            </div>
-          ) : !projectDetails ? (
-            <Card>
-              <p className="text-muted text-center py-8">Project not found.</p>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Main Content */}
-              <div className="lg:col-span-2 space-y-6">
-                <Card className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className={cn("text-xs font-semibold px-2.5 py-0.5 rounded-full border capitalize", statusColors[projectDetails.status])}>
-                      {projectDetails.status.replace("_", " ")}
-                    </span>
-                    <span className={cn("text-xs font-semibold px-2.5 py-0.5 rounded-full border capitalize", healthColors[projectDetails.health])}>
-                      {projectDetails.health.replace("_", " ")}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h2 className="text-2xl font-bold text-foreground">{projectDetails.title}</h2>
-                    {projectDetails.description ? (
-                      <p className="text-sm text-muted mt-3 whitespace-pre-wrap leading-relaxed">
-                        {projectDetails.description}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted mt-3 italic">No description provided.</p>
-                    )}
-                  </div>
-
-                  <div className="pt-2">
-                    <div className="flex justify-between text-sm font-medium mb-1.5">
-                      <span className="text-muted">Completion Progress</span>
-                      <span>{projectDetails.completion_percentage}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-card-border overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${projectDetails.completion_percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Milestones Card */}
-                <Card>
-                  <h3 className="font-semibold mb-4 flex items-center gap-2 text-primary">
-                    <Award className="h-5 w-5" /> Project Milestones
-                  </h3>
-                  {!projectDetails.milestones || projectDetails.milestones.length === 0 ? (
-                    <p className="text-xs text-muted py-4 text-center">No milestones added yet.</p>
-                  ) : (
-                    <div className="space-y-4 relative border-l border-card-border pl-5 ml-2.5">
-                      {projectDetails.milestones.map((m) => (
-                        <div key={m.id} className="relative">
-                          {/* Dot status icon */}
-                          <span className={cn(
-                            "absolute -left-[30px] top-0.5 rounded-full p-0.5 border bg-card",
-                            m.is_completed ? "text-success border-success/30" : "text-muted border-card-border"
-                          )}>
-                            <CheckSquare className="h-4 w-4" />
-                          </span>
-
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className={cn("font-medium text-sm", m.is_completed ? "line-through text-muted" : "text-foreground")}>
-                                {m.title}
-                              </p>
-                              {m.is_completed && (
-                                <span className="text-[10px] bg-success/15 text-success font-semibold px-2 py-0.5 rounded-full">
-                                  Completed
-                                </span>
-                              )}
-                            </div>
-                            {m.description && <p className="text-xs text-muted mt-1">{m.description}</p>}
-                            {m.due_date && (
-                              <p className="text-[10px] text-muted mt-1.5 flex items-center gap-1">
-                                <Clock className="h-3.5 w-3.5" /> Due: {m.due_date}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </div>
-
-              {/* Sidebar Info */}
-              <div className="space-y-6">
-                <Card className="space-y-4">
-                  <h3 className="font-semibold text-sm border-b border-card-border pb-2">Details</h3>
-                  
-                  <div className="space-y-3 text-xs">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted flex items-center gap-1.5"><User className="h-4 w-4" /> Lead/Owner</span>
-                      <span className="font-medium text-foreground">
-                        {projectDetails.owner_detail ? `${projectDetails.owner_detail.first_name} ${projectDetails.owner_detail.last_name}` : "Admin"}
-                      </span>
-                    </div>
-
-                    {projectDetails.department_detail && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted flex items-center gap-1.5"><Layers className="h-4 w-4" /> Department</span>
-                        <span className="font-medium text-foreground">{projectDetails.department_detail.name}</span>
-                      </div>
-                    )}
-
-                    {projectDetails.team_detail && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted flex items-center gap-1.5"><Users className="h-4 w-4" /> Team</span>
-                        <span className="font-medium text-foreground">{projectDetails.team_detail.name}</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted flex items-center gap-1.5"><Calendar className="h-4 w-4" /> Timeline</span>
-                      <span className="font-medium text-foreground">
-                        {projectDetails.start_date ? formatDate(projectDetails.start_date) : "—"} to {projectDetails.end_date ? formatDate(projectDetails.end_date) : "—"}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Team Members List */}
-                <Card>
-                  <h3 className="font-semibold text-sm border-b border-card-border pb-2 flex items-center gap-1.5 mb-3">
-                    <Users className="h-4 w-4 text-primary" /> Members ({(projectDetails.members_detail ?? []).length})
-                  </h3>
-                  {!projectDetails.members_detail || projectDetails.members_detail.length === 0 ? (
-                    <p className="text-xs text-muted text-center py-2">No team members assigned.</p>
-                  ) : (
-                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                      {projectDetails.members_detail.map((m) => (
-                        <div key={m.id} className="flex items-center gap-2 text-xs">
-                          <div className="rounded-full bg-primary/10 p-1.5"><User className="h-3.5 w-3.5 text-primary" /></div>
-                          <div className="truncate">
-                            <p className="font-medium text-foreground">{m.first_name} {m.last_name}</p>
-                            <p className="text-[10px] text-muted">{m.role?.name || "Member"}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </div>
-            </div>
-          )}
-        </div>
-      </>
-    );
-  }
+  const projects = data ?? [];
 
   return (
     <>
       <TopBar title="Projects" />
       <div className="p-6">
-        {listLoading ? (
+        {isLoading ? (
           <p className="text-muted">Loading projects...</p>
         ) : projects.length === 0 ? (
           <Card>
             <p className="text-muted text-center py-8">No projects yet.</p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {projects.map((project) => (
-              <div
-                key={project.id}
-                onClick={() => setSelectedSlug(project.slug)}
-                className="cursor-pointer group"
-              >
-                <Card className="hover:border-primary/50 hover:shadow-md transition-all">
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">{project.title}</h3>
-                    <span className={cn("text-[10px] font-semibold border capitalize px-2 py-0.5 rounded-full", statusColors[project.status])}>
-                      {project.status.replace("_", " ")}
-                    </span>
+              <Card key={project.id}>
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="font-semibold">{project.title}</h3>
+                  <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+                    {project.status.replace("_", " ")}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted">Progress</span>
+                    <span>{project.completion_percentage}%</span>
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-muted">Progress</span>
-                      <span>{project.completion_percentage}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-card-border overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${project.completion_percentage}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <span className={cn("text-[10px] font-semibold capitalize px-2 py-0.5 rounded-full border", healthColors[project.health])}>
-                        {project.health.replace("_", " ")}
-                      </span>
-                      {project.task_count !== undefined && (
-                        <span className="text-[10px] text-muted">{project.task_count} tasks</span>
-                      )}
-                    </div>
+                  <div className="h-2 rounded-full bg-card-border overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all"
+                      style={{ width: `${project.completion_percentage}%` }}
+                    />
                   </div>
-                </Card>
-              </div>
+                  <p className={cn("text-xs capitalize", healthColors[project.health])}>
+                    {project.health.replace("_", " ")}
+                  </p>
+                </div>
+              </Card>
             ))}
           </div>
         )}
+
+        {/* Create Project Modal */}
+        {isCreateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-md p-6 bg-card relative space-y-4">
+              <button onClick={() => setIsCreateModalOpen(false)} className="absolute top-4 right-4 text-muted hover:text-foreground">
+                <X size={18} />
+              </button>
+              <h3 className="text-lg font-bold">Create New Project</h3>
+              <form onSubmit={handleCreateProject} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted">Project Title</label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. RoboDog V2, Drone Swarm" required />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted">Description</label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Overview of the project goals..." />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-muted">Status</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
+                      className="w-full h-10 rounded-lg border border-card-border bg-card px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="planning">Planning</option>
+                      <option value="active">Active</option>
+                      <option value="on_hold">On Hold</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-muted">Health</label>
+                    <select
+                      value={health}
+                      onChange={(e) => setHealth(e.target.value)}
+                      className="w-full h-10 rounded-lg border border-card-border bg-card px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="on_track">On Track</option>
+                      <option value="at_risk">At Risk</option>
+                      <option value="off_track">Off Track</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted">Project Leader</label>
+                  <select
+                    value={owner}
+                    onChange={(e) => setOwner(e.target.value)}
+                    className="w-full h-10 rounded-lg border border-card-border bg-card px-3 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">Select Project Leader</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>{m.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createProjectMutation.isPending} className="text-white">
+                    {createProjectMutation.isPending ? "Creating..." : "Create"}
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          </div>
+        )}
+
+        {/* Project Detailed View Modal */}
+        {selectedProjectSlug && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-4xl p-6 bg-card relative max-h-[90vh] overflow-y-auto space-y-6">
+              <button
+                onClick={() => setSelectedProjectSlug(null)}
+                className="absolute top-4 right-4 text-muted hover:text-foreground"
+              >
+                <X size={20} />
+              </button>
+
+              {isDetailLoading || !projectDetail ? (
+                <p className="text-muted py-8 text-center">Loading details...</p>
+              ) : (
+                <div className="space-y-6">
+                  {/* Header details */}
+                  <div className="border-b border-card-border pb-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h2 className="text-2xl font-black text-white">{projectDetail.title}</h2>
+                        <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full border text-xs capitalize font-medium mr-2" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+                          {projectDetail.status.replace("_", " ")}
+                        </span>
+                        <span className={cn("px-2.5 py-0.5 rounded-full border text-xs capitalize", healthColors[projectDetail.health])}>
+                          {projectDetail.health.replace("_", " ")}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted">Project Leader</p>
+                        <p className="text-sm font-semibold text-white">{projectDetail.owner_detail?.full_name || "None Assigned"}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted mt-4">{projectDetail.description || "No description provided."}</p>
+                  </div>
+
+                  {/* Progress & Overview */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/20 p-4 rounded-xl border border-card-border">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm font-semibold">
+                        <span className="text-muted">Progression</span>
+                        <span className="text-white">{projectDetail.completion_percentage}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${projectDetail.completion_percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-around items-center text-center">
+                      <div>
+                        <p className="text-lg font-bold text-white">{projectDetail.phases?.length || 0}</p>
+                        <p className="text-xs text-muted">Phases</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-white">{projectDetail.teams_detail?.length || 0}</p>
+                        <p className="text-xs text-muted">Teams</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-white">{projectDetail.members_detail?.length || 0}</p>
+                        <p className="text-xs text-muted">Members</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Phases Tree & Hierarchy */}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center border-b border-card-border pb-2">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        Project Phases & Stages
+                      </h3>
+                    </div>
+
+                    {/* Add Phase Form */}
+                    {isSuperuser && (
+                      <div className="space-y-2">
+                        <form onSubmit={handleAddPhase} className="flex gap-2 max-w-lg">
+                          <Input
+                            value={newPhaseTitle}
+                            onChange={(e) => { setNewPhaseTitle(e.target.value); setPhaseError(null); }}
+                            placeholder="Add a Phase (e.g. Phase 1: Design & CAD)"
+                            className="h-9 text-xs"
+                            required
+                          />
+                          <Button type="submit" size="sm" disabled={createPhaseMutation.isPending} className="h-9 px-3 text-white flex items-center gap-1 shrink-0">
+                            <Plus size={14} /> {createPhaseMutation.isPending ? "Adding..." : "Add Phase"}
+                          </Button>
+                        </form>
+                        {phaseError && (
+                          <p className="text-xs text-danger bg-danger/10 border border-danger/20 px-3 py-1.5 rounded-lg">{phaseError}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Interactive Phases Tree */}
+                    <div className="space-y-4 pt-2">
+                      {projectDetail.phases?.map((phase: any) => {
+                        const hasStages = (phase.sub_stages?.length || 0) > 0;
+                        return (
+                          <div key={phase.id} className="border border-white/5 bg-white/[0.02] rounded-xl p-4 space-y-3">
+                            <div className="flex justify-between items-center bg-white/[0.02] -mx-4 -mt-4 p-3 rounded-t-xl border-b border-white/5">
+                              <div className="flex items-center gap-2">
+                                {/* Toggling is only active if no children */}
+                                <button
+                                  disabled={hasStages || !isSuperuser}
+                                  onClick={() =>
+                                    togglePhaseMutation.mutate({
+                                      id: phase.id,
+                                      data: { is_completed: !phase.is_completed },
+                                    })
+                                  }
+                                  className={cn("text-muted hover:text-white transition-colors", hasStages && "opacity-50 cursor-not-allowed")}
+                                >
+                                  {phase.is_completed ? (
+                                    <CheckCircle2 size={16} className="text-success" />
+                                  ) : (
+                                    <Circle size={16} />
+                                  )}
+                                </button>
+                                <span className="font-bold text-sm text-white">{phase.title}</span>
+                              </div>
+                              {isSuperuser && (
+                                <button
+                                  onClick={() => deletePhaseMutation.mutate(phase.id)}
+                                  className="text-muted hover:text-danger p-1 rounded transition-colors"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Sub Stages */}
+                            <div className="pl-6 space-y-4">
+                              {phase.sub_stages?.map((stage: any) => {
+                                const hasSubLevels = (stage.sub_levels?.length || 0) > 0;
+                                return (
+                                  <div key={stage.id} className="border-l border-white/10 pl-4 space-y-2">
+                                    <div className="flex justify-between items-center group/stage">
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          disabled={hasSubLevels || !isSuperuser}
+                                          onClick={() =>
+                                            toggleSubStageMutation.mutate({
+                                              id: stage.id,
+                                              data: { is_completed: !stage.is_completed },
+                                            })
+                                          }
+                                          className={cn("text-muted hover:text-white transition-colors", hasSubLevels && "opacity-50 cursor-not-allowed")}
+                                        >
+                                          {stage.is_completed ? (
+                                            <CheckCircle2 size={14} className="text-success" />
+                                          ) : (
+                                            <Circle size={14} />
+                                          )}
+                                        </button>
+                                        <span className="text-xs font-semibold text-white/80">{stage.title}</span>
+                                      </div>
+                                      {isSuperuser && (
+                                        <button
+                                          onClick={() => deleteSubStageMutation.mutate(stage.id)}
+                                          className="text-muted hover:text-danger p-0.5 rounded opacity-0 group-hover/stage:opacity-100 transition-all"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Sub Levels */}
+                                    <div className="pl-6 space-y-1.5">
+                                      {stage.sub_levels?.map((sub: any) => (
+                                        <div key={sub.id} className="flex justify-between items-center group/sub text-[11px]">
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              disabled={!isSuperuser}
+                                              onClick={() =>
+                                                toggleSubLevelMutation.mutate({
+                                                  id: sub.id,
+                                                  data: { is_completed: !sub.is_completed },
+                                                })
+                                              }
+                                              className="text-muted hover:text-white transition-colors"
+                                            >
+                                              {sub.is_completed ? (
+                                                <CheckCircle2 size={12} className="text-success" />
+                                              ) : (
+                                                <Circle size={12} />
+                                              )}
+                                            </button>
+                                            <span className="text-white/60">{sub.title}</span>
+                                          </div>
+                                          {isSuperuser && (
+                                            <button
+                                              onClick={() => deleteSubLevelMutation.mutate(sub.id)}
+                                              className="text-muted hover:text-danger p-0.5 rounded opacity-0 group-hover/sub:opacity-100 transition-all"
+                                            >
+                                              <Trash2 size={10} />
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+
+                                      {/* Add SubLevel Trigger */}
+                                      {isSuperuser && activeSubStageAddId === stage.id ? (
+                                        <form
+                                          onSubmit={(e) => handleAddSubLevel(e, stage.id)}
+                                          className="flex gap-2 max-w-xs pt-1"
+                                        >
+                                          <Input
+                                            value={newSubLevelTitle}
+                                            onChange={(e) => setNewSubLevelTitle(e.target.value)}
+                                            placeholder="Sub-level check item"
+                                            className="h-7 text-[10px]"
+                                            autoFocus
+                                            required
+                                          />
+                                          <Button type="submit" size="sm" className="h-7 px-2 text-[10px]">Add</Button>
+                                          <button type="button" onClick={() => setActiveSubStageAddId(null)} className="text-muted hover:text-white">
+                                            <X size={12} />
+                                          </button>
+                                        </form>
+                                      ) : isSuperuser ? (
+                                        <button
+                                          onClick={() => {
+                                            setActiveSubStageAddId(stage.id);
+                                            setNewSubLevelTitle("");
+                                          }}
+                                          className="text-[10px] text-primary/70 hover:text-primary flex items-center gap-0.5 pt-1"
+                                        >
+                                          <Plus size={10} /> Add Sub-level
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Add SubStage Trigger */}
+                              {isSuperuser && activePhaseAddId === phase.id ? (
+                                <form
+                                  onSubmit={(e) => handleAddSubStage(e, phase.id)}
+                                  className="flex gap-2 max-w-xs pt-1 pl-4"
+                                >
+                                  <Input
+                                    value={newSubStageTitle}
+                                    onChange={(e) => setNewSubStageTitle(e.target.value)}
+                                    placeholder="Sub-stage title"
+                                    className="h-8 text-xs"
+                                    autoFocus
+                                    required
+                                  />
+                                  <Button type="submit" size="sm" className="h-8 px-2 text-xs">Add</Button>
+                                  <button type="button" onClick={() => setActivePhaseAddId(null)} className="text-muted hover:text-white">
+                                    <X size={14} />
+                                  </button>
+                                </form>
+                              ) : isSuperuser ? (
+                                <button
+                                  onClick={() => {
+                                    setActivePhaseAddId(phase.id);
+                                    setNewSubStageTitle("");
+                                  }}
+                                  className="text-xs text-primary/75 hover:text-primary flex items-center gap-1 pl-4"
+                                >
+                                  <Plus size={12} /> Add Sub-stage
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(!projectDetail.phases || projectDetail.phases.length === 0) && (
+                        <p className="text-xs text-muted italic pl-2">No phases defined for this project.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
       </div>
     </>
   );

@@ -18,7 +18,7 @@ class PermissionAdmin(admin.ModelAdmin):
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     list_display = ("email", "first_name", "last_name", "role", "is_active")
-    list_filter = ("role", "is_active", "year")
+    list_filter = ("role", "is_active", "batch")
     search_fields = ("email", "first_name", "last_name")
 
 

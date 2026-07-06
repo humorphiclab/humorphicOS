@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -12,12 +13,15 @@ import {
 import { cn, slugify } from "@/lib/utils";
 import { authApi, getStoredUser, setStoredTokens, setStoredUser } from "@/lib/api";
 import { canAccessNav } from "@/lib/permissions";
+import { ThemeToggle } from "@/components/theme-toggle";
+
 
 const navSections = [
   {
     label: "Overview",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, resource: "dashboard" },
+      { href: "/my-space", label: "My Space", icon: ClipboardList, resource: "dashboard" },
       { href: "/calendar", label: "Calendar", icon: Calendar, resource: "meetings" },
       { href: "/analytics", label: "Analytics", icon: BarChart3, resource: "analytics", leadership: true },
     ],
@@ -35,8 +39,7 @@ const navSections = [
     label: "People",
     items: [
       { href: "/members", label: "Members", icon: Users, resource: "users" },
-      { href: "/departments", label: "Departments", icon: Building2, resource: "departments" },
-      { href: "/teams", label: "Teams", icon: UsersRound, resource: "teams" },
+      { href: "/directory", label: "Directory", icon: UsersRound, resource: "dashboard" },
       { href: "/attendance", label: "Attendance", icon: QrCode, resource: "attendance" },
     ],
   },
@@ -73,6 +76,12 @@ const navSections = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const user = getStoredUser();
   const { data: permData } = useQuery({
     queryKey: ["permissions"],
@@ -136,10 +145,10 @@ export function Sidebar() {
       </nav>
 
       <div className="p-3 border-t border-card-border">
-        {user && (
+        {mounted && user && (
           <div className="mb-2 px-2">
             <p className="text-sm font-medium truncate">{user.first_name} {user.last_name}</p>
-            <p className="text-xs text-muted truncate">{user.role?.name || "Member"}</p>
+            <p className="text-xs text-muted truncate">{user.is_superuser ? "Superuser" : (user.role?.name || "Member")}</p>
           </div>
         )}
         <button
@@ -168,6 +177,7 @@ export function TopBar({ title }: { title: string }) {
       <Link href="/notifications" className="relative rounded-lg p-2 hover:bg-card-border/30 transition-colors">
         <Bell className="h-5 w-5 text-muted" />
       </Link>
+      <ThemeToggle />
     </header>
   );
 }

@@ -17,7 +17,7 @@ export default function TeamsPage() {
         ) : (teams ?? []).map((t) => (
           <Card key={t.id}>
             <p className="font-semibold">{t.name}</p>
-            <p className="text-xs text-primary mt-1">{t.department_detail?.name}</p>
+            <p className="text-xs text-primary mt-1">{t.project_detail?.title}</p>
             <p className="text-sm text-muted mt-2">{t.member_count ?? 0} members</p>
           </Card>
         ))}
