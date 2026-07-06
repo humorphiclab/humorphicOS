@@ -160,6 +160,7 @@ export const projectsApi = {
   list: () => list<Project>("/projects/"),
   create: (data: Partial<Project>) =>
     apiFetch<Project>("/projects/", { method: "POST", body: JSON.stringify(data) }),
+  detail: (slug: string) => apiFetch<Project>(`/projects/${slug}/`),
 };
 export const departmentsApi = {
   list: () => list<Department>("/departments/"),
@@ -363,8 +364,31 @@ export interface Task {
   id: number; title: string; description: string; status: string; priority: string;
   due_date: string | null; assignee_detail?: User; project_detail?: Project;
 }
+export interface Milestone {
+  id: number;
+  title: string;
+  description: string;
+  due_date: string | null;
+  is_completed: boolean;
+  completed_at: string | null;
+  order: number;
+}
 export interface Project {
-  id: number; title: string; slug: string; status: string; health: string; completion_percentage: number;
+  id: number;
+  title: string;
+  slug: string;
+  status: string;
+  health: string;
+  completion_percentage: number;
+  description?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  owner_detail?: User;
+  members_detail?: User[];
+  milestones?: Milestone[];
+  team_detail?: Team;
+  department_detail?: Department;
+  task_count?: number;
 }
 export interface Department { id: number; name: string; slug: string; color: string; member_count?: number; }
 export interface Team { id: number; name: string; slug: string; member_count?: number; department_detail?: Department; }
