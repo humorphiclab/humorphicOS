@@ -8,7 +8,7 @@ class Channel(models.Model):
     description = models.TextField(blank=True)
     team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, null=True, blank=True, related_name="channels")
     department = models.ForeignKey(
-        "departments.Department", on_delete=models.SET_NULL, null=True, blank=True
+        "departments.Department", on_delete=models.CASCADE, null=True, blank=True
     )
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="chat_channels", blank=True)
     is_private = models.BooleanField(default=False)
@@ -49,3 +49,28 @@ class ChannelMessage(models.Model):
 
     def __str__(self):
         return f"{self.channel}: {self.content[:50]}"
+
+
+class FriendRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_friend_requests"
+    )
+    receiver = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="received_friend_requests"
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("sender", "receiver")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.sender} -> {self.receiver} ({self.status})"
+

@@ -20,6 +20,7 @@ export interface User {
   first_name: string;
   last_name: string;
   full_name: string;
+  is_superuser?: boolean;
   phone?: string;
   role?: { id: number; name: string; slug: string; is_leadership: boolean };
   college?: string;
@@ -121,8 +122,8 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-  register: (data: Record<string, string>) =>
-    apiFetch<User>("/auth/register/", { method: "POST", body: JSON.stringify(data) }),
+  register: (data: FormData | Record<string, any>) =>
+    apiFetch<User>("/auth/register/", { method: "POST", body: data instanceof FormData ? data : JSON.stringify(data) }),
   googleLogin: (id_token: string) =>
     apiFetch<{ tokens: AuthTokens; user: User }>("/auth/google/", {
       method: "POST",
@@ -146,6 +147,7 @@ export const authApi = {
 
 export const membersApi = {
   list: () => authApi.users(),
+  get: (id: number) => apiFetch<User>(`/auth/users/${id}/`),
 };
 
 // ── Core ──
@@ -158,18 +160,67 @@ export const tasksApi = {
 
 export const projectsApi = {
   list: () => list<Project>("/projects/"),
+  get: (slug: string) =>
+    apiFetch<any>(`/projects/${slug}/`),
   create: (data: Partial<Project>) =>
     apiFetch<Project>("/projects/", { method: "POST", body: JSON.stringify(data) }),
+  update: (slug: string, data: Partial<Project>) =>
+    apiFetch<Project>(`/projects/${slug}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (slug: string) =>
+    apiFetch<void>(`/projects/${slug}/`, { method: "DELETE" }),
 };
 export const departmentsApi = {
   list: () => list<Department>("/departments/"),
   create: (data: Partial<Department>) =>
     apiFetch<Department>("/departments/", { method: "POST", body: JSON.stringify(data) }),
+  update: (slug: string, data: Partial<Department>) =>
+    apiFetch<Department>(`/departments/${slug}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (slug: string) =>
+    apiFetch<void>(`/departments/${slug}/`, { method: "DELETE" }),
+  join: (slug: string) =>
+    apiFetch<{ status: string }>(`/departments/${slug}/join/`, { method: "POST" }),
+  leave: (slug: string) =>
+    apiFetch<{ status: string }>(`/departments/${slug}/leave/`, { method: "POST" }),
 };
 export const teamsApi = {
   list: () => list<Team>("/teams/"),
   create: (data: Partial<Team>) =>
     apiFetch<Team>("/teams/", { method: "POST", body: JSON.stringify(data) }),
+  update: (slug: string, data: Partial<Team>) =>
+    apiFetch<Team>(`/teams/${slug}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (slug: string) =>
+    apiFetch<void>(`/teams/${slug}/`, { method: "DELETE" }),
+  join: (slug: string) =>
+    apiFetch<{ status: string }>(`/teams/${slug}/join/`, { method: "POST" }),
+  leave: (slug: string) =>
+    apiFetch<{ status: string }>(`/teams/${slug}/leave/`, { method: "POST" }),
+};
+
+export const projectPhasesApi = {
+  create: (data: any) =>
+    apiFetch<any>("/projects/phases/", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: any) =>
+    apiFetch<any>(`/projects/phases/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    apiFetch<void>(`/projects/phases/${id}/`, { method: "DELETE" }),
+};
+
+export const subStagesApi = {
+  create: (data: any) =>
+    apiFetch<any>("/projects/substages/", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: any) =>
+    apiFetch<any>(`/projects/substages/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    apiFetch<void>(`/projects/substages/${id}/`, { method: "DELETE" }),
+};
+
+export const subLevelsApi = {
+  create: (data: any) =>
+    apiFetch<any>("/projects/sublevels/", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: any) =>
+    apiFetch<any>(`/projects/sublevels/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    apiFetch<void>(`/projects/sublevels/${id}/`, { method: "DELETE" }),
 };
 
 export const dailyUpdatesApi = {
@@ -319,7 +370,18 @@ export const chatApi = {
     }),
   dmConversation: (userId: number) =>
     apiFetch<DirectMessage[]>(`/chat/direct/conversation/?user=${userId}`),
-  dmContacts: () => list<User>("/auth/users/"),
+  dmContacts: () => list<User>("/chat/direct/contacts/"),
+  friendRequests: () => list<FriendRequest>("/chat/friend-requests/"),
+  sendFriendRequest: (receiverId: number) =>
+    apiFetch<FriendRequest>("/chat/friend-requests/", {
+      method: "POST",
+      body: JSON.stringify({ receiver: receiverId }),
+    }),
+  respondFriendRequest: (requestId: number, action: "accept" | "reject") =>
+    apiFetch<FriendRequest>(`/chat/friend-requests/${requestId}/respond/`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
 };
 
 // ── Phase 3 ──
@@ -365,9 +427,26 @@ export interface Task {
 }
 export interface Project {
   id: number; title: string; slug: string; status: string; health: string; completion_percentage: number;
+  description?: string; start_date?: string | null; end_date?: string | null;
+  owner?: number; owner_detail?: User;
+  members?: number[]; members_detail?: User[];
+  teams_detail?: Team[]; department?: number; department_detail?: Department;
+  phases?: any[];
+  task_count?: number; created_at?: string; updated_at?: string;
 }
-export interface Department { id: number; name: string; slug: string; color: string; member_count?: number; }
-export interface Team { id: number; name: string; slug: string; member_count?: number; department_detail?: Department; }
+export interface Department {
+  id: number; name: string; slug: string; color: string; description?: string; is_active?: boolean;
+  head?: number | null; head_detail?: User | null;
+  members?: number[]; members_detail?: User[];
+  member_count?: number; created_at?: string;
+}
+export interface Team {
+  id: number; name: string; slug: string; description?: string; is_active?: boolean; is_archived?: boolean;
+  project?: number; project_detail?: { id: number; title: string; slug: string; status: string; health: string };
+  lead?: number | null; lead_detail?: User | null;
+  members?: number[]; members_detail?: User[];
+  member_count?: number; created_at?: string;
+}
 export interface DailyUpdate {
   id: number; date: string; work_done: string; hours_worked: number;
   challenges: string; learning: string; tomorrow_plan: string; need_help: string;
@@ -395,6 +474,16 @@ export interface Achievement { id: number; title: string; description: string; x
 export interface Channel { id: number; name: string; slug: string; description: string; }
 export interface ChannelMessage { id: number; content: string; author_detail?: User; created_at: string; }
 export interface DirectMessage { id: number; content: string; sender_detail?: User; recipient_detail?: User; is_read: boolean; created_at: string; }
+export interface FriendRequest {
+  id: number;
+  sender: number;
+  sender_detail: User;
+  receiver: number;
+  receiver_detail: User;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+  updated_at: string;
+}
 export interface AiInsight { id: number; insight_type: string; title: string; content: string; created_at: string; }
 export interface CalendarEvent { id: string; type: string; title: string; start: string; end: string; color: string; }
 export interface SearchResult { query: string; count: number; results: { type: string; id: number; title: string; subtitle: string; url: string }[]; }

@@ -56,13 +56,7 @@ class Permission(models.Model):
 class User(AbstractUser):
     """Extended user model for club members."""
 
-    class Year(models.TextChoices):
-        FIRST = "1", "1st Year"
-        SECOND = "2", "2nd Year"
-        THIRD = "3", "3rd Year"
-        FOURTH = "4", "4th Year"
-        GRADUATE = "grad", "Graduate"
-        OTHER = "other", "Other"
+    enrollment_number = models.CharField(max_length=50, blank=True)
 
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -72,7 +66,7 @@ class User(AbstractUser):
     )
     college = models.CharField(max_length=200, blank=True)
     branch = models.CharField(max_length=100, blank=True)
-    year = models.CharField(max_length=10, choices=Year.choices, blank=True)
+    batch = models.CharField(max_length=20, blank=True)
     skills = models.JSONField(default=list, blank=True)
     linkedin = models.URLField(blank=True)
     github = models.URLField(blank=True)

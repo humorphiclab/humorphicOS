@@ -15,6 +15,11 @@ class Department(models.Model):
         blank=True,
         related_name="headed_departments",
     )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name="departments",
+        blank=True,
+    )
     color = models.CharField(max_length=7, default="#6366f1")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

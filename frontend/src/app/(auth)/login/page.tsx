@@ -74,15 +74,22 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign in"}
           </Button>
 
-          {GOOGLE_CLIENT_ID && (
-            <>
-              <div className="relative my-2">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-card-border" /></div>
-                <div className="relative flex justify-center text-xs"><span className="bg-card px-2 text-muted">or</span></div>
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-card-border" /></div>
+            <div className="relative flex justify-center text-xs"><span className="bg-card px-2 text-muted">or continue with</span></div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            {GOOGLE_CLIENT_ID ? (
+              <div className="flex items-center justify-center overflow-hidden">
+                <GoogleSignIn clientId={GOOGLE_CLIENT_ID} onSuccess={handleGoogle} onError={() => setError("Google sign-in failed")} />
               </div>
-              <GoogleSignIn clientId={GOOGLE_CLIENT_ID} onSuccess={handleGoogle} onError={() => setError("Google sign-in failed")} />
-            </>
-          )}
+            ) : (
+              <Button type="button" variant="secondary" className="w-full" onClick={() => alert("Please configure NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env file to enable Google Sign-In.")}>
+                Google
+              </Button>
+            )}
+          </div>
 
           <p className="text-center text-sm text-muted">
             Demo: <span className="text-foreground">president@humorphic.club</span> / <span className="text-foreground">Demo@12345</span>

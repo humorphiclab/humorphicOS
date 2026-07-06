@@ -35,7 +35,27 @@ class ChatView(APIView):
         ChatMessage.objects.create(
             user=request.user, role=ChatMessage.Role.USER, content=message, session_id=session_id
         )
-        reply = chat_response(message)
+
+        user = request.user
+        context_parts = [f"User Name: {user.get_full_name()}"]
+        if user.role:
+            context_parts.append(f"Role: {user.role.name}")
+            
+        pending_tasks = Task.objects.filter(assignee=user).exclude(status='completed')[:5]
+        if pending_tasks:
+            t_str = ", ".join([f"'{t.title}' ({t.status})" for t in pending_tasks])
+            context_parts.append(f"Current Tasks: {t_str}")
+            
+        from apps.projects.models import Project
+        active_projects = Project.objects.filter(members=user, status='active')[:3]
+        if active_projects:
+            p_str = ", ".join([p.title for p in active_projects])
+            context_parts.append(f"Active Projects: {p_str}")
+
+        context_str = " | ".join(context_parts)
+        
+        reply = chat_response(message, context=context_str)
+        
         ChatMessage.objects.create(
             user=request.user, role=ChatMessage.Role.ASSISTANT, content=reply, session_id=session_id
         )

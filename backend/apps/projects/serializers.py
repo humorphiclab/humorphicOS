@@ -4,15 +4,34 @@ from apps.accounts.serializers import UserListSerializer
 from apps.departments.serializers import DepartmentSerializer
 from apps.teams.serializers import TeamSerializer
 
-from .models import Milestone, Project
+from .models import Project, ProjectPhase, SubStage, SubLevel
 
 
-class MilestoneSerializer(serializers.ModelSerializer):
+class SubLevelSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Milestone
+        model = SubLevel
         fields = (
-            "id", "title", "description", "due_date",
-            "is_completed", "completed_at", "order",
+            "id", "sub_stage", "title", "order", "is_completed",
+        )
+
+
+class SubStageSerializer(serializers.ModelSerializer):
+    sub_levels = SubLevelSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SubStage
+        fields = (
+            "id", "phase", "title", "order", "is_completed", "sub_levels",
+        )
+
+
+class ProjectPhaseSerializer(serializers.ModelSerializer):
+    sub_stages = SubStageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ProjectPhase
+        fields = (
+            "id", "project", "title", "order", "is_completed", "sub_stages",
         )
 
 
@@ -32,13 +51,13 @@ class ProjectListSerializer(serializers.ModelSerializer):
 
 
 class ProjectDetailSerializer(ProjectListSerializer):
-    milestones = MilestoneSerializer(many=True, read_only=True)
-    team_detail = TeamSerializer(source="team", read_only=True)
+    phases = ProjectPhaseSerializer(many=True, read_only=True)
+    teams_detail = TeamSerializer(source="teams", many=True, read_only=True)
     department_detail = DepartmentSerializer(source="department", read_only=True)
     members_detail = UserListSerializer(source="members", many=True, read_only=True)
 
     class Meta(ProjectListSerializer.Meta):
         fields = ProjectListSerializer.Meta.fields + (
-            "description", "team", "team_detail", "department", "department_detail",
-            "members", "members_detail", "milestones", "updated_at",
+            "description", "teams_detail", "department", "department_detail",
+            "members", "members_detail", "phases", "updated_at",
         )
