@@ -166,6 +166,8 @@ export const tasksApi = {
     fd.append("task", String(taskId));
     return apiFetch<TaskAttachment>(`/tasks/${taskId}/attachments/`, { method: "POST", body: fd });
   },
+  addComment: (taskId: number, content: string) =>
+    apiFetch<any>(`/tasks/${taskId}/comments/`, { method: "POST", body: JSON.stringify({ content }) }),
 };
 
 export const projectsApi = {

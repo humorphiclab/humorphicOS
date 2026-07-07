@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -89,7 +90,12 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def my_tasks(self, request):
-        tasks = self.queryset.filter(assignee=request.user)
+        tasks = self.queryset.filter(
+            Q(assignee=request.user) |
+            Q(assigned_team__in=request.user.teams.all()) |
+            Q(assigned_department__in=request.user.departments.all()) |
+            Q(assigned_by=request.user)
+        ).distinct()
         page = self.paginate_queryset(tasks)
         serializer = self.get_serializer(page or tasks, many=True)
         if page is not None:
@@ -102,6 +108,13 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
         qs = self.queryset
         if project_id:
             qs = qs.filter(project_id=project_id)
+        else:
+            qs = qs.filter(
+                Q(assignee=request.user) |
+                Q(assigned_team__in=request.user.teams.all()) |
+                Q(assigned_department__in=request.user.departments.all()) |
+                Q(assigned_by=request.user)
+            ).distinct()
         board = {}
         for status, label in Task.Status.choices:
             board[status] = TaskSerializer(
