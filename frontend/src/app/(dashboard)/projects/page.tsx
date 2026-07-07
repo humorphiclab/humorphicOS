@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useState } from "react";
 import {
   projectsApi,
   membersApi,
@@ -19,9 +19,9 @@ import { cn, slugify } from "@/lib/utils";
 import { Plus, X, Trash2, CheckCircle2, Circle } from "lucide-react";
 
 const healthColors: Record<string, string> = {
-  on_track: "text-success bg-success/10 border-success/20",
-  at_risk: "text-warning bg-warning/10 border-warning/20",
-  off_track: "text-danger bg-danger/10 border-danger/20",
+  on_track: "text-success",
+  at_risk: "text-warning",
+  off_track: "text-danger",
 };
 
 const LinkedTasks = ({ tasks }: { tasks?: any[] }) => {
@@ -134,7 +134,14 @@ export default function ProjectsPage() {
     },
   });
 
-
+  const createTaskMutation = useMutation({
+    mutationFn: (data: any) => apiFetch("/tasks/", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      setIsTaskModalOpen(false);
+      setTaskForm({ title: "", description: "", priority: "medium", assignee: "", assigned_team: "", assigned_department: "", project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: "" });
+    },
+  });
 
   // Phase Hierarchy Mutations
   const createPhaseMutation = useMutation({
@@ -213,15 +220,6 @@ export default function ProjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-    },
-  });
-
-  const createTaskMutation = useMutation({
-    mutationFn: (data: any) => apiFetch("/tasks/", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
-      setIsTaskModalOpen(false);
-      setTaskForm({ title: "", description: "", priority: "medium", assignee: "", assigned_team: "", assigned_department: "", project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: "" });
     },
   });
 
@@ -335,26 +333,20 @@ export default function ProjectsPage() {
 
                   <p className="text-sm text-muted mb-6">{project.description || "No description provided."}</p>
                 </div>
-
-                <div className="space-y-4 border-t border-card-border pt-4">
-                  <div className="flex justify-between text-xs font-medium">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
                     <span className="text-muted">Progress</span>
                     <span>{project.completion_percentage}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-2 rounded-full bg-card-border overflow-hidden">
                     <div
                       className="h-full bg-primary rounded-full transition-all"
                       style={{ width: `${project.completion_percentage}%` }}
                     />
                   </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className={cn("px-2.5 py-0.5 rounded-full border", healthColors[project.health])}>
-                      {project.health.replace("_", " ").toUpperCase()}
-                    </span>
-                    <span className="text-muted">
-                      Owner: {project.owner_detail?.full_name || "None"}
-                    </span>
-                  </div>
+                  <p className={cn("text-xs capitalize", healthColors[project.health])}>
+                    {project.health.replace("_", " ")}
+                  </p>
                 </div>
               </Card>
             ))}
