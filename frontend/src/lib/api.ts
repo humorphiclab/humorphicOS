@@ -131,8 +131,8 @@ export const authApi = {
     }),
   config: () => apiFetch<{ google_enabled: boolean; google_client_id: string | null }>("/auth/config/"),
   me: () => apiFetch<User>("/auth/me/"),
-  updateMe: (data: Partial<User>) =>
-    apiFetch<User>("/auth/me/", { method: "PATCH", body: JSON.stringify(data) }),
+  updateMe: (data: FormData | Record<string, any>) =>
+    apiFetch<User>("/auth/me/", { method: "PATCH", body: data instanceof FormData ? data : JSON.stringify(data) }),
   permissions: () => apiFetch<PermissionsPayload>("/auth/permissions/"),
   roles: () => list<Role>("/auth/roles/"),
   updateUserRole: (userId: number, roleId: number) =>
@@ -156,6 +156,16 @@ export const tasksApi = {
   myTasks: () => list<Task>("/tasks/my_tasks/"),
   kanban: (project?: number) =>
     apiFetch<Record<string, Task[]>>(`/tasks/kanban/${project ? `?project=${project}` : ""}`),
+  create: (data: Record<string, unknown>) =>
+    apiFetch<Task>("/tasks/", { method: "POST", body: JSON.stringify(data) }),
+  updateStatus: (id: number, status: string) =>
+    apiFetch<Task>(`/tasks/${id}/status/`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  uploadAttachment: (taskId: number, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("task", String(taskId));
+    return apiFetch<TaskAttachment>(`/tasks/${taskId}/attachments/`, { method: "POST", body: fd });
+  },
 };
 
 export const projectsApi = {
@@ -423,7 +433,16 @@ export interface PermissionsPayload {
 }
 export interface Task {
   id: number; title: string; description: string; status: string; priority: string;
-  due_date: string | null; assignee_detail?: User; project_detail?: Project;
+  due_date: string | null; assigned_by?: number; assigned_by_detail?: User;
+  assignee?: number | null; assignee_detail?: User;
+  assigned_department?: number | null; assigned_team?: number | null;
+  project?: number | null; project_detail?: Project;
+  linked_phase?: number | null; linked_sub_stage?: number | null; linked_sub_level?: number | null;
+  attachments?: TaskAttachment[];
+  created_at?: string; updated_at?: string; completed_at?: string | null;
+}
+export interface TaskAttachment {
+  id: number; file: string; uploaded_by: number; uploaded_by_detail?: User; created_at: string;
 }
 export interface Project {
   id: number; title: string; slug: string; status: string; health: string; completion_percentage: number;

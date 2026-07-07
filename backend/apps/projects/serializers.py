@@ -7,31 +7,46 @@ from apps.teams.serializers import TeamSerializer
 from .models import Project, ProjectPhase, SubStage, SubLevel
 
 
+class LinkedTaskSummarySerializer(serializers.Serializer):
+    """Lightweight task summary to embed inside phase hierarchy nodes."""
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    priority = serializers.CharField()
+    due_date = serializers.DateField(allow_null=True)
+    assignee_detail = UserListSerializer(source="assignee", read_only=True)
+
+
+
 class SubLevelSerializer(serializers.ModelSerializer):
+    tasks = LinkedTaskSummarySerializer(many=True, read_only=True)
+
     class Meta:
         model = SubLevel
         fields = (
-            "id", "sub_stage", "title", "order", "is_completed",
+            "id", "sub_stage", "title", "order", "is_completed", "tasks",
         )
 
 
 class SubStageSerializer(serializers.ModelSerializer):
     sub_levels = SubLevelSerializer(many=True, read_only=True)
+    tasks = LinkedTaskSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = SubStage
         fields = (
-            "id", "phase", "title", "order", "is_completed", "sub_levels",
+            "id", "phase", "title", "order", "is_completed", "sub_levels", "tasks",
         )
 
 
 class ProjectPhaseSerializer(serializers.ModelSerializer):
     sub_stages = SubStageSerializer(many=True, read_only=True)
+    tasks = LinkedTaskSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = ProjectPhase
         fields = (
-            "id", "project", "title", "order", "is_completed", "sub_stages",
+            "id", "project", "title", "order", "is_completed", "sub_stages", "tasks",
         )
 
 
