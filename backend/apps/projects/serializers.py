@@ -7,47 +7,80 @@ from apps.teams.serializers import TeamSerializer
 from .models import Project, ProjectPhase, SubStage, SubLevel
 
 
+class LinkedTaskSummarySerializer(serializers.Serializer):
+    """Lightweight task summary to embed inside phase hierarchy nodes."""
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    priority = serializers.CharField()
+    due_date = serializers.DateField(allow_null=True)
+    assignee_detail = UserListSerializer(source="assignee", read_only=True)
+
+
+
 class SubLevelSerializer(serializers.ModelSerializer):
+    tasks = LinkedTaskSummarySerializer(many=True, read_only=True)
+
     class Meta:
         model = SubLevel
         fields = (
-            "id", "sub_stage", "title", "order", "is_completed",
+            "id", "sub_stage", "title", "order", "is_completed", "tasks",
         )
 
 
 class SubStageSerializer(serializers.ModelSerializer):
     sub_levels = SubLevelSerializer(many=True, read_only=True)
+    tasks = LinkedTaskSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = SubStage
         fields = (
-            "id", "phase", "title", "order", "is_completed", "sub_levels",
+            "id", "phase", "title", "order", "is_completed", "sub_levels", "tasks",
         )
 
 
 class ProjectPhaseSerializer(serializers.ModelSerializer):
     sub_stages = SubStageSerializer(many=True, read_only=True)
+    tasks = LinkedTaskSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = ProjectPhase
         fields = (
-            "id", "project", "title", "order", "is_completed", "sub_stages",
+            "id", "project", "title", "order", "is_completed", "sub_stages", "tasks",
         )
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
     owner_detail = UserListSerializer(source="owner", read_only=True)
     task_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
         fields = (
             "id", "title", "slug", "status", "health", "completion_percentage",
-            "start_date", "end_date", "owner", "owner_detail", "task_count", "created_at",
+            "start_date", "end_date", "owner", "owner_detail", "task_count", "members", "created_at",
         )
 
     def get_task_count(self, obj):
         return obj.tasks.count() if hasattr(obj, "tasks") else 0
+        
+    def get_members(self, obj):
+        # Collect all user IDs involved in the project (owner, explicit members, team leads, team members)
+        user_ids = set()
+        if obj.owner_id:
+            user_ids.add(obj.owner_id)
+            
+        for member in obj.members.all():
+            user_ids.add(member.id)
+            
+        for team in obj.teams.prefetch_related('members'):
+            if team.lead_id:
+                user_ids.add(team.lead_id)
+            for tm in team.members.all():
+                user_ids.add(tm.id)
+                
+        return list(user_ids)
 
 
 class ProjectDetailSerializer(ProjectListSerializer):

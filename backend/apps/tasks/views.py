@@ -5,14 +5,15 @@ from rest_framework.response import Response
 
 from apps.accounts.rbac import RBACMixin
 
-from .models import Task, TaskComment
-from .serializers import TaskCommentCreateSerializer, TaskCommentSerializer, TaskSerializer
+from .models import Task, TaskComment, TaskAttachment
+from .serializers import TaskCommentCreateSerializer, TaskCommentSerializer, TaskSerializer, TaskAttachmentSerializer
 
 
 class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
     rbac_resource = "tasks"
     rbac_action_map = {
         "comments": "update",
+        "attachments": "update",
         "status": "update",
         "my_tasks": "read",
         "kanban": "read",
@@ -34,6 +35,19 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
         comment = serializer.save()
         return Response(TaskCommentSerializer(comment).data, status=201)
 
+    @action(detail=True, methods=["post"])
+    def attachments(self, request, pk=None):
+        task = self.get_object()
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response({"detail": "No file provided."}, status=400)
+        attachment = TaskAttachment.objects.create(
+            task=task,
+            file=file_obj,
+            uploaded_by=request.user
+        )
+        return Response(TaskAttachmentSerializer(attachment).data, status=201)
+
     @action(detail=True, methods=["patch"])
     def status(self, request, pk=None):
         task = self.get_object()
@@ -44,7 +58,34 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
         if new_status == Task.Status.DONE:
             task.completed_at = timezone.now()
         task.save()
+        
+        # Progression logic: check if all linked tasks are done
+        if new_status == Task.Status.DONE:
+            self._check_and_complete_linked_entity(task)
+            
         return Response(TaskSerializer(task).data)
+
+    def _check_and_complete_linked_entity(self, task):
+        # SubLevel Check
+        if task.linked_sub_level and not task.linked_sub_level.is_completed:
+            all_done = not task.linked_sub_level.tasks.exclude(status=Task.Status.DONE).exists()
+            if all_done:
+                task.linked_sub_level.is_completed = True
+                task.linked_sub_level.save()
+                
+        # SubStage Check
+        if task.linked_sub_stage and not task.linked_sub_stage.is_completed:
+            all_done = not task.linked_sub_stage.tasks.exclude(status=Task.Status.DONE).exists()
+            if all_done:
+                task.linked_sub_stage.is_completed = True
+                task.linked_sub_stage.save()
+                
+        # Phase Check
+        if task.linked_phase and not task.linked_phase.is_completed:
+            all_done = not task.linked_phase.tasks.exclude(status=Task.Status.DONE).exists()
+            if all_done:
+                task.linked_phase.is_completed = True
+                task.linked_phase.save()
 
     @action(detail=False, methods=["get"])
     def my_tasks(self, request):

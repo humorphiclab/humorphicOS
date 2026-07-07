@@ -21,8 +21,23 @@ class Task(models.Model):
     project = models.ForeignKey(
         "projects.Project", on_delete=models.CASCADE, related_name="tasks", null=True, blank=True
     )
+    linked_phase = models.ForeignKey(
+        "projects.ProjectPhase", on_delete=models.SET_NULL, related_name="tasks", null=True, blank=True
+    )
+    linked_sub_stage = models.ForeignKey(
+        "projects.SubStage", on_delete=models.SET_NULL, related_name="tasks", null=True, blank=True
+    )
+    linked_sub_level = models.ForeignKey(
+        "projects.SubLevel", on_delete=models.SET_NULL, related_name="tasks", null=True, blank=True
+    )
     assignee = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_tasks"
+    )
+    assigned_department = models.ForeignKey(
+        "departments.Department", on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_tasks"
+    )
+    assigned_team = models.ForeignKey(
+        "teams.Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_tasks"
     )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_tasks"
@@ -68,3 +83,16 @@ class TaskComment(models.Model):
 
     def __str__(self):
         return f"Comment on {self.task.title} by {self.author}"
+
+
+class TaskAttachment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to="tasks/attachments/")
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Attachment for {self.task.title}"

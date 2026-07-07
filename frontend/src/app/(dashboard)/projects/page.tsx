@@ -12,13 +12,211 @@ const healthColors: Record<string, string> = {
   off_track: "text-danger",
 };
 
+const LinkedTasks = ({ tasks }: { tasks?: any[] }) => {
+  if (!tasks || tasks.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {tasks.map((t) => (
+        <span key={t.id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-card-border bg-black/20 text-[10px] text-white/80">
+          <span
+            className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              t.status === "done" ? "bg-success" : t.status === "in_progress" ? "bg-primary" : "bg-muted"
+            )}
+          />
+          {t.title}
+          {t.assignee_detail && <span className="text-muted ml-1 opacity-70">({t.assignee_detail.first_name})</span>}
+        </span>
+      ))}
+    </div>
+  );
+};
+
 export default function ProjectsPage() {
-  const { data, isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  const currentUser = getStoredUser();
+  const isSuperuser = currentUser?.is_superuser;
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null);
+
+  // Form states for project creation
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("planning");
+  const [health, setHealth] = useState("on_track");
+  const [owner, setOwner] = useState("");
+
+  // Phase tree adding states
+  const [newPhaseTitle, setNewPhaseTitle] = useState("");
+  const [activePhaseAddId, setActivePhaseAddId] = useState<number | null>(null);
+  const [newSubStageTitle, setNewSubStageTitle] = useState("");
+  const [activeSubStageAddId, setActiveSubStageAddId] = useState<number | null>(null);
+  const [newSubLevelTitle, setNewSubLevelTitle] = useState("");
+  const [phaseError, setPhaseError] = useState<string | null>(null);
+
+  // Queries
+  const { data: projects = [], isLoading: isProjectsLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: projectsApi.list,
   });
 
-  const projects = data ?? [];
+  const { data: members = [] } = useQuery({
+    queryKey: ["members"],
+    queryFn: membersApi.list,
+  });
+
+  const { data: projectDetail, isLoading: isDetailLoading } = useQuery({
+    queryKey: ["project", selectedProjectSlug],
+    queryFn: () => projectsApi.get(selectedProjectSlug!),
+    enabled: !!selectedProjectSlug,
+  });
+
+  // Project Mutations
+  const createProjectMutation = useMutation({
+    mutationFn: (data: any) => projectsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setIsCreateModalOpen(false);
+      setTitle("");
+      setDescription("");
+      setStatus("planning");
+      setHealth("on_track");
+      setOwner("");
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: (slug: string) => projectsApi.delete(slug),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      if (selectedProjectSlug) setSelectedProjectSlug(null);
+    },
+  });
+
+  // Phase Hierarchy Mutations
+  const createPhaseMutation = useMutation({
+    mutationFn: (data: any) => projectPhasesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setNewPhaseTitle("");
+      setPhaseError(null);
+    },
+    onError: (err: any) => setPhaseError(err?.message || "Failed to create phase"),
+  });
+
+  const deletePhaseMutation = useMutation({
+    mutationFn: (id: number) => projectPhasesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const togglePhaseMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => projectPhasesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const createSubStageMutation = useMutation({
+    mutationFn: (data: any) => subStagesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setNewSubStageTitle("");
+      setActivePhaseAddId(null);
+    },
+  });
+
+  const deleteSubStageMutation = useMutation({
+    mutationFn: (id: number) => subStagesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const toggleSubStageMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => subStagesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const createSubLevelMutation = useMutation({
+    mutationFn: (data: any) => subLevelsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setNewSubLevelTitle("");
+      setActiveSubStageAddId(null);
+    },
+  });
+
+  const deleteSubLevelMutation = useMutation({
+    mutationFn: (id: number) => subLevelsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const toggleSubLevelMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => subLevelsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  // Handlers
+  const handleCreateProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title) return;
+    createProjectMutation.mutate({
+      title,
+      slug: slugify(title),
+      description,
+      status,
+      health,
+      owner: owner ? parseInt(owner) : null,
+    });
+  };
+
+  const handleAddPhase = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPhaseTitle || !projectDetail) return;
+    createPhaseMutation.mutate({
+      project: projectDetail.id,
+      title: newPhaseTitle,
+      order: (projectDetail.phases?.length || 0) + 1,
+    });
+  };
+
+  const handleAddSubStage = (e: React.FormEvent, phaseId: number) => {
+    e.preventDefault();
+    if (!newSubStageTitle) return;
+    createSubStageMutation.mutate({
+      phase: phaseId,
+      title: newSubStageTitle,
+      order: 1,
+    });
+  };
+
+  const handleAddSubLevel = (e: React.FormEvent, subStageId: number) => {
+    e.preventDefault();
+    if (!newSubLevelTitle) return;
+    createSubLevelMutation.mutate({
+      sub_stage: subStageId,
+      title: newSubLevelTitle,
+      order: 1,
+    });
+  };
 
   return (
     <>
@@ -250,16 +448,27 @@ export default function ProjectsPage() {
                                     <Circle size={16} />
                                   )}
                                 </button>
-                                <span className="font-bold text-sm text-white">{phase.title}</span>
+                                <div>
+                                    <span className="font-bold text-sm text-white">{phase.title}</span>
+                                    <LinkedTasks tasks={phase.tasks} />
+                                </div>
                               </div>
-                              {isSuperuser && (
-                                <button
-                                  onClick={() => deletePhaseMutation.mutate(phase.id)}
-                                  className="text-muted hover:text-danger p-1 rounded transition-colors"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
+                                  {isSuperuser && (
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => openTaskModal({ linked_phase: String(phase.id) })}
+                                            className="text-[10px] bg-primary/20 hover:bg-primary/40 text-primary px-2 py-0.5 rounded transition-colors"
+                                        >
+                                            + Task
+                                        </button>
+                                        <button
+                                        onClick={() => deletePhaseMutation.mutate(phase.id)}
+                                        className="text-muted hover:text-danger p-1 rounded transition-colors"
+                                        >
+                                        <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                  )}
                             </div>
 
                             {/* Sub Stages */}
@@ -286,15 +495,26 @@ export default function ProjectsPage() {
                                             <Circle size={14} />
                                           )}
                                         </button>
-                                        <span className="text-xs font-semibold text-white/80">{stage.title}</span>
+                                        <div>
+                                            <span className="text-xs font-semibold text-white/80">{stage.title}</span>
+                                            <LinkedTasks tasks={stage.tasks} />
+                                        </div>
                                       </div>
                                       {isSuperuser && (
-                                        <button
-                                          onClick={() => deleteSubStageMutation.mutate(stage.id)}
-                                          className="text-muted hover:text-danger p-0.5 rounded opacity-0 group-hover/stage:opacity-100 transition-all"
-                                        >
-                                          <Trash2 size={12} />
-                                        </button>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover/stage:opacity-100 transition-all">
+                                            <button
+                                                onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id) })}
+                                                className="text-[9px] bg-primary/20 hover:bg-primary/40 text-primary px-1.5 py-0.5 rounded transition-colors"
+                                            >
+                                                + Task
+                                            </button>
+                                            <button
+                                            onClick={() => deleteSubStageMutation.mutate(stage.id)}
+                                            className="text-muted hover:text-danger p-0.5 rounded"
+                                            >
+                                            <Trash2 size={12} />
+                                            </button>
+                                        </div>
                                       )}
                                     </div>
 
@@ -319,15 +539,26 @@ export default function ProjectsPage() {
                                                 <Circle size={12} />
                                               )}
                                             </button>
-                                            <span className="text-white/60">{sub.title}</span>
+                                            <div>
+                                                <span className="text-white/60">{sub.title}</span>
+                                                <LinkedTasks tasks={sub.tasks} />
+                                            </div>
                                           </div>
                                           {isSuperuser && (
-                                            <button
-                                              onClick={() => deleteSubLevelMutation.mutate(sub.id)}
-                                              className="text-muted hover:text-danger p-0.5 rounded opacity-0 group-hover/sub:opacity-100 transition-all"
-                                            >
-                                              <Trash2 size={10} />
-                                            </button>
+                                            <div className="flex items-center gap-1 opacity-0 group-hover/sub:opacity-100 transition-all">
+                                                <button
+                                                    onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id), linked_sub_level: String(sub.id) })}
+                                                    className="text-[9px] bg-primary/20 hover:bg-primary/40 text-primary px-1.5 py-0.5 rounded transition-colors"
+                                                >
+                                                    + Task
+                                                </button>
+                                                <button
+                                                onClick={() => deleteSubLevelMutation.mutate(sub.id)}
+                                                className="text-muted hover:text-danger p-0.5 rounded"
+                                                >
+                                                <Trash2 size={10} />
+                                                </button>
+                                            </div>
                                           )}
                                         </div>
                                       ))}
@@ -410,6 +641,113 @@ export default function ProjectsPage() {
               )}
             </Card>
           </div>
+        )}
+
+        {/* Task Creation Modal */}
+        {isTaskModalOpen && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-lg p-6 bg-card relative max-h-[90vh] overflow-y-auto space-y-4">
+              <button onClick={() => setIsTaskModalOpen(false)} className="absolute top-4 right-4 text-muted hover:text-foreground">
+                <X size={18} />
+              </button>
+              <h3 className="text-lg font-bold">Assign Task</h3>
+              <p className="text-xs text-muted mb-4">This task will be automatically linked to the selected project level.</p>
+              
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  createTaskMutation.mutate({
+                    title: taskForm.title,
+                    description: taskForm.description,
+                    priority: taskForm.priority,
+                    status: "todo",
+                    ...(assignType === "member" && taskForm.assignee ? { assignee: Number(taskForm.assignee) } : {}),
+                    ...(assignType === "team" && taskForm.assigned_team ? { assigned_team: Number(taskForm.assigned_team) } : {}),
+                    ...(assignType === "department" && taskForm.assigned_department ? { assigned_department: Number(taskForm.assigned_department) } : {}),
+                    ...(taskForm.project ? { project: Number(taskForm.project) } : {}),
+                    ...(taskForm.linked_phase ? { linked_phase: Number(taskForm.linked_phase) } : {}),
+                    ...(taskForm.linked_sub_stage ? { linked_sub_stage: Number(taskForm.linked_sub_stage) } : {}),
+                    ...(taskForm.linked_sub_level ? { linked_sub_level: Number(taskForm.linked_sub_level) } : {}),
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="text-xs font-semibold text-muted">Title</label>
+                  <Input value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} required />
+                </div>
+                
+                <div className="p-3 border rounded-lg bg-card/50">
+                    <h4 className="text-xs font-medium mb-2">Assignment Target</h4>
+                    <div className="flex gap-2 mb-2">
+                        <Button type="button" size="sm" variant={assignType === "member" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("member")}>Member</Button>
+                        <Button type="button" size="sm" variant={assignType === "team" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("team")}>Team</Button>
+                        <Button type="button" size="sm" variant={assignType === "department" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("department")}>Department</Button>
+                    </div>
+                    
+                    {assignType === "member" && (
+                        <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                            value={taskForm.assignee}
+                            onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })}
+                        >
+                            <option value="">Unassigned</option>
+                            {(members ?? []).map((m: any) => (
+                            <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    {assignType === "team" && (
+                        <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                            value={taskForm.assigned_team}
+                            onChange={(e) => setTaskForm({ ...taskForm, assigned_team: e.target.value })}
+                        >
+                            <option value="">Select Team</option>
+                            {(teams ?? []).map((t: any) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    {assignType === "department" && (
+                        <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                            value={taskForm.assigned_department}
+                            onChange={(e) => setTaskForm({ ...taskForm, assigned_department: e.target.value })}
+                        >
+                            <option value="">Select Department</option>
+                            {(departments ?? []).map((d: any) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
+                <div>
+                    <label className="text-xs font-semibold text-muted">Priority</label>
+                    <select
+                    className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                    value={taskForm.priority}
+                    onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                    >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+                
+                <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={createTaskMutation.isPending} className="text-white">
+                    {createTaskMutation.isPending ? "Assigning..." : "Assign Task"}
+                    </Button>
+                </div>
+              </form>
+            </Card>
+           </div>
         )}
 
       </div>
