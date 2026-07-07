@@ -1,26 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  projectsApi,
-  membersApi,
-  getStoredUser,
-  projectPhasesApi,
-  subStagesApi,
-  subLevelsApi,
-} from "@/lib/api";
-import { cn, slugify } from "@/lib/utils";
-import { Plus, X, Trash2, CheckCircle2, Circle } from "lucide-react";
+import { projectsApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const healthColors: Record<string, string> = {
-  on_track: "text-success bg-success/10 border-success/20",
-  at_risk: "text-warning bg-warning/10 border-warning/20",
-  off_track: "text-danger bg-danger/10 border-danger/20",
+  on_track: "text-success",
+  at_risk: "text-warning",
+  off_track: "text-danger",
 };
 
 const LinkedTasks = ({ tasks }: { tasks?: any[] }) => {
@@ -66,15 +55,6 @@ export default function ProjectsPage() {
   const [newSubLevelTitle, setNewSubLevelTitle] = useState("");
   const [phaseError, setPhaseError] = useState<string | null>(null);
 
-  // Task creation from Project view
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [taskForm, setTaskForm] = useState({ 
-    title: "", description: "", priority: "medium", 
-    assignee: "", assigned_team: "", assigned_department: "",
-    project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: ""
-  });
-  const [assignType, setAssignType] = useState<"member" | "team" | "department">("member");
-
   // Queries
   const { data: projects = [], isLoading: isProjectsLoading } = useQuery({
     queryKey: ["projects"],
@@ -84,16 +64,6 @@ export default function ProjectsPage() {
   const { data: members = [] } = useQuery({
     queryKey: ["members"],
     queryFn: membersApi.list,
-  });
-
-  const { data: teams = [] } = useQuery({
-    queryKey: ["teams"],
-    queryFn: () => apiFetch<any[]>("/teams/").then((res: any) => res.results || res),
-  });
-
-  const { data: departments = [] } = useQuery({
-    queryKey: ["departments"],
-    queryFn: () => apiFetch<any[]>("/departments/").then((res: any) => res.results || res),
   });
 
   const { data: projectDetail, isLoading: isDetailLoading } = useQuery({
@@ -204,15 +174,6 @@ export default function ProjectsPage() {
     },
   });
 
-  const createTaskMutation = useMutation({
-    mutationFn: (data: any) => apiFetch("/tasks/", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
-      setIsTaskModalOpen(false);
-      setTaskForm({ title: "", description: "", priority: "medium", assignee: "", assigned_team: "", assigned_department: "", project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: "" });
-    },
-  });
-
   // Handlers
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,37 +218,11 @@ export default function ProjectsPage() {
     });
   };
 
-  const openTaskModal = (linkData: any) => {
-    setTaskForm({
-      title: "", description: "", priority: "medium", 
-      assignee: "", assigned_team: "", assigned_department: "",
-      project: String(projectDetail?.id || ""),
-      linked_phase: linkData.linked_phase || "",
-      linked_sub_stage: linkData.linked_sub_stage || "",
-      linked_sub_level: linkData.linked_sub_level || "",
-    });
-    setIsTaskModalOpen(true);
-  };
-
   return (
     <>
       <TopBar title="Projects" />
-      <div className="p-6 space-y-6">
-        
-        {/* Controls */}
-        <div className="flex justify-between items-center">
-          <p className="text-muted text-sm">
-            Manage club projects, tracks progress, and organize team members.
-          </p>
-          {isSuperuser && (
-            <Button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 text-white">
-              <Plus size={16} /> Create Project
-            </Button>
-          )}
-        </div>
-
-        {/* Project Grid */}
-        {isProjectsLoading ? (
+      <div className="p-6">
+        {isLoading ? (
           <p className="text-muted">Loading projects...</p>
         ) : projects.length === 0 ? (
           <Card>
@@ -296,54 +231,27 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {projects.map((project) => (
-              <Card
-                key={project.id}
-                onClick={() => setSelectedProjectSlug(project.slug)}
-                className="relative group p-6 flex flex-col justify-between h-full cursor-pointer hover:border-primary/50 transition-colors"
-              >
-                <div>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-bold text-lg">{project.title}</h3>
-                      <span className="inline-block text-xs capitalize px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 mt-1">
-                        {project.status.replace("_", " ")}
-                      </span>
-                    </div>
-                    {isSuperuser && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteProjectMutation.mutate(project.slug);
-                        }}
-                        className="p-1.5 rounded-lg text-muted hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                  
-                  <p className="text-sm text-muted mb-6">{project.description || "No description provided."}</p>
+              <Card key={project.id}>
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="font-semibold">{project.title}</h3>
+                  <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+                    {project.status.replace("_", " ")}
+                  </span>
                 </div>
-
-                <div className="space-y-4 border-t border-card-border pt-4">
-                  <div className="flex justify-between text-xs font-medium">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
                     <span className="text-muted">Progress</span>
                     <span>{project.completion_percentage}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-2 rounded-full bg-card-border overflow-hidden">
                     <div
                       className="h-full bg-primary rounded-full transition-all"
                       style={{ width: `${project.completion_percentage}%` }}
                     />
                   </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className={cn("px-2.5 py-0.5 rounded-full border", healthColors[project.health])}>
-                      {project.health.replace("_", " ").toUpperCase()}
-                    </span>
-                    <span className="text-muted">
-                      Owner: {project.owner_detail?.full_name || "None"}
-                    </span>
-                  </div>
+                  <p className={cn("text-xs capitalize", healthColors[project.health])}>
+                    {project.health.replace("_", " ")}
+                  </p>
                 </div>
               </Card>
             ))}

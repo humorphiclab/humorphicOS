@@ -176,10 +176,6 @@ export const projectsApi = {
     apiFetch<any>(`/projects/${slug}/`),
   create: (data: Partial<Project>) =>
     apiFetch<Project>("/projects/", { method: "POST", body: JSON.stringify(data) }),
-  update: (slug: string, data: Partial<Project>) =>
-    apiFetch<Project>(`/projects/${slug}/`, { method: "PATCH", body: JSON.stringify(data) }),
-  delete: (slug: string) =>
-    apiFetch<void>(`/projects/${slug}/`, { method: "DELETE" }),
 };
 export const departmentsApi = {
   list: () => list<Department>("/departments/"),
@@ -446,14 +442,17 @@ export interface Task {
 export interface TaskAttachment {
   id: number; file: string; uploaded_by: number; uploaded_by_detail?: User; created_at: string;
 }
+export interface Milestone {
+  id: number;
+  title: string;
+  description: string;
+  due_date: string | null;
+  is_completed: boolean;
+  completed_at: string | null;
+  order: number;
+}
 export interface Project {
   id: number; title: string; slug: string; status: string; health: string; completion_percentage: number;
-  description?: string; start_date?: string | null; end_date?: string | null;
-  owner?: number; owner_detail?: User;
-  members?: number[]; members_detail?: User[];
-  teams_detail?: Team[]; department?: number; department_detail?: Department;
-  phases?: any[];
-  task_count?: number; created_at?: string; updated_at?: string;
 }
 export interface Department {
   id: number; name: string; slug: string; color: string; description?: string; is_active?: boolean;
