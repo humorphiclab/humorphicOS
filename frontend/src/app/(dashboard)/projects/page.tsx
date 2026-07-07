@@ -13,6 +13,7 @@ import {
   projectPhasesApi,
   subStagesApi,
   subLevelsApi,
+  apiFetch,
 } from "@/lib/api";
 import { cn, slugify } from "@/lib/utils";
 import { Plus, X, Trash2, CheckCircle2, Circle } from "lucide-react";
@@ -66,14 +67,23 @@ export default function ProjectsPage() {
   const [newSubLevelTitle, setNewSubLevelTitle] = useState("");
   const [phaseError, setPhaseError] = useState<string | null>(null);
 
-  // Task creation from Project view
+  // Task Modal states
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [taskForm, setTaskForm] = useState({ 
-    title: "", description: "", priority: "medium", 
-    assignee: "", assigned_team: "", assigned_department: "",
-    project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: ""
-  });
   const [assignType, setAssignType] = useState<"member" | "team" | "department">("member");
+  const [taskForm, setTaskForm] = useState<any>({
+    title: "",
+    description: "",
+    priority: "medium",
+    assignee: "",
+    assigned_team: "",
+    assigned_department: "",
+    project: "",
+    linked_phase: "",
+    linked_sub_stage: "",
+    linked_sub_level: "",
+  });
+
+
 
   // Queries
   const { data: projects = [], isLoading: isProjectsLoading } = useQuery({
@@ -123,6 +133,8 @@ export default function ProjectsPage() {
       if (selectedProjectSlug) setSelectedProjectSlug(null);
     },
   });
+
+
 
   // Phase Hierarchy Mutations
   const createPhaseMutation = useMutation({
@@ -259,7 +271,7 @@ export default function ProjectsPage() {
 
   const openTaskModal = (linkData: any) => {
     setTaskForm({
-      title: "", description: "", priority: "medium", 
+      title: "", description: "", priority: "medium",
       assignee: "", assigned_team: "", assigned_department: "",
       project: String(projectDetail?.id || ""),
       linked_phase: linkData.linked_phase || "",
@@ -273,7 +285,6 @@ export default function ProjectsPage() {
     <>
       <TopBar title="Projects" />
       <div className="p-6 space-y-6">
-        
         {/* Controls */}
         <div className="flex justify-between items-center">
           <p className="text-muted text-sm">
@@ -321,7 +332,7 @@ export default function ProjectsPage() {
                       </button>
                     )}
                   </div>
-                  
+
                   <p className="text-sm text-muted mb-6">{project.description || "No description provided."}</p>
                 </div>
 
@@ -367,7 +378,7 @@ export default function ProjectsPage() {
                   <label className="text-xs font-semibold text-muted">Description</label>
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Overview of the project goals..." />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-muted">Status</label>
@@ -520,8 +531,8 @@ export default function ProjectsPage() {
                       {projectDetail.phases?.map((phase: any) => {
                         const hasStages = (phase.sub_stages?.length || 0) > 0;
                         return (
-                          <div key={phase.id} className="border border-white/5 bg-white/[0.02] rounded-xl p-4 space-y-3">
-                            <div className="flex justify-between items-center bg-white/[0.02] -mx-4 -mt-4 p-3 rounded-t-xl border-b border-white/5">
+                          <div key={phase.id} className="border border-white/5 bg-white/2 rounded-xl p-4 space-y-3">
+                            <div className="flex justify-between items-center bg-white/2 -mx-4 -mt-4 p-3 rounded-t-xl border-b border-white/5">
                               <div className="flex items-center gap-2">
                                 {/* Toggling is only active if no children */}
                                 <button
@@ -541,26 +552,26 @@ export default function ProjectsPage() {
                                   )}
                                 </button>
                                 <div>
-                                    <span className="font-bold text-sm text-white">{phase.title}</span>
-                                    <LinkedTasks tasks={phase.tasks} />
+                                  <span className="font-bold text-sm text-white">{phase.title}</span>
+                                  <LinkedTasks tasks={phase.tasks} />
                                 </div>
                               </div>
-                                  {isSuperuser && (
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => openTaskModal({ linked_phase: String(phase.id) })}
-                                            className="text-[10px] bg-primary/20 hover:bg-primary/40 text-primary px-2 py-0.5 rounded transition-colors"
-                                        >
-                                            + Task
-                                        </button>
-                                        <button
-                                        onClick={() => deletePhaseMutation.mutate(phase.id)}
-                                        className="text-muted hover:text-danger p-1 rounded transition-colors"
-                                        >
-                                        <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                  )}
+                              {isSuperuser && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => openTaskModal({ linked_phase: String(phase.id) })}
+                                    className="text-[10px] bg-primary/20 hover:bg-primary/40 text-primary px-2 py-0.5 rounded transition-colors"
+                                  >
+                                    + Task
+                                  </button>
+                                  <button
+                                    onClick={() => deletePhaseMutation.mutate(phase.id)}
+                                    className="text-muted hover:text-danger p-1 rounded transition-colors"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
                             {/* Sub Stages */}
@@ -588,24 +599,24 @@ export default function ProjectsPage() {
                                           )}
                                         </button>
                                         <div>
-                                            <span className="text-xs font-semibold text-white/80">{stage.title}</span>
-                                            <LinkedTasks tasks={stage.tasks} />
+                                          <span className="text-xs font-semibold text-white/80">{stage.title}</span>
+                                          <LinkedTasks tasks={stage.tasks} />
                                         </div>
                                       </div>
                                       {isSuperuser && (
                                         <div className="flex items-center gap-1 opacity-0 group-hover/stage:opacity-100 transition-all">
-                                            <button
-                                                onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id) })}
-                                                className="text-[9px] bg-primary/20 hover:bg-primary/40 text-primary px-1.5 py-0.5 rounded transition-colors"
-                                            >
-                                                + Task
-                                            </button>
-                                            <button
+                                          <button
+                                            onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id) })}
+                                            className="text-[9px] bg-primary/20 hover:bg-primary/40 text-primary px-1.5 py-0.5 rounded transition-colors"
+                                          >
+                                            + Task
+                                          </button>
+                                          <button
                                             onClick={() => deleteSubStageMutation.mutate(stage.id)}
                                             className="text-muted hover:text-danger p-0.5 rounded"
-                                            >
+                                          >
                                             <Trash2 size={12} />
-                                            </button>
+                                          </button>
                                         </div>
                                       )}
                                     </div>
@@ -632,24 +643,24 @@ export default function ProjectsPage() {
                                               )}
                                             </button>
                                             <div>
-                                                <span className="text-white/60">{sub.title}</span>
-                                                <LinkedTasks tasks={sub.tasks} />
+                                              <span className="text-white/60">{sub.title}</span>
+                                              <LinkedTasks tasks={sub.tasks} />
                                             </div>
                                           </div>
                                           {isSuperuser && (
                                             <div className="flex items-center gap-1 opacity-0 group-hover/sub:opacity-100 transition-all">
-                                                <button
-                                                    onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id), linked_sub_level: String(sub.id) })}
-                                                    className="text-[9px] bg-primary/20 hover:bg-primary/40 text-primary px-1.5 py-0.5 rounded transition-colors"
-                                                >
-                                                    + Task
-                                                </button>
-                                                <button
+                                              <button
+                                                onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id), linked_sub_level: String(sub.id) })}
+                                                className="text-[9px] bg-primary/20 hover:bg-primary/40 text-primary px-1.5 py-0.5 rounded transition-colors"
+                                              >
+                                                + Task
+                                              </button>
+                                              <button
                                                 onClick={() => deleteSubLevelMutation.mutate(sub.id)}
                                                 className="text-muted hover:text-danger p-0.5 rounded"
-                                                >
+                                              >
                                                 <Trash2 size={10} />
-                                                </button>
+                                              </button>
                                             </div>
                                           )}
                                         </div>
@@ -737,14 +748,14 @@ export default function ProjectsPage() {
 
         {/* Task Creation Modal */}
         {isTaskModalOpen && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <Card className="w-full max-w-lg p-6 bg-card relative max-h-[90vh] overflow-y-auto space-y-4">
               <button onClick={() => setIsTaskModalOpen(false)} className="absolute top-4 right-4 text-muted hover:text-foreground">
                 <X size={18} />
               </button>
               <h3 className="text-lg font-bold">Assign Task</h3>
               <p className="text-xs text-muted mb-4">This task will be automatically linked to the selected project level.</p>
-              
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -768,78 +779,78 @@ export default function ProjectsPage() {
                   <label className="text-xs font-semibold text-muted">Title</label>
                   <Input value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} required />
                 </div>
-                
+
                 <div className="p-3 border rounded-lg bg-card/50">
-                    <h4 className="text-xs font-medium mb-2">Assignment Target</h4>
-                    <div className="flex gap-2 mb-2">
-                        <Button type="button" size="sm" variant={assignType === "member" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("member")}>Member</Button>
-                        <Button type="button" size="sm" variant={assignType === "team" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("team")}>Team</Button>
-                        <Button type="button" size="sm" variant={assignType === "department" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("department")}>Department</Button>
-                    </div>
-                    
-                    {assignType === "member" && (
-                        <select
-                            className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
-                            value={taskForm.assignee}
-                            onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })}
-                        >
-                            <option value="">Unassigned</option>
-                            {(members ?? []).map((m: any) => (
-                            <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
-                            ))}
-                        </select>
-                    )}
+                  <h4 className="text-xs font-medium mb-2">Assignment Target</h4>
+                  <div className="flex gap-2 mb-2">
+                    <Button type="button" size="sm" variant={assignType === "member" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("member")}>Member</Button>
+                    <Button type="button" size="sm" variant={assignType === "team" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("team")}>Team</Button>
+                    <Button type="button" size="sm" variant={assignType === "department" ? "primary" : "secondary"} className="h-7 text-[10px]" onClick={() => setAssignType("department")}>Department</Button>
+                  </div>
 
-                    {assignType === "team" && (
-                        <select
-                            className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
-                            value={taskForm.assigned_team}
-                            onChange={(e) => setTaskForm({ ...taskForm, assigned_team: e.target.value })}
-                        >
-                            <option value="">Select Team</option>
-                            {(teams ?? []).map((t: any) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                        </select>
-                    )}
+                  {assignType === "member" && (
+                    <select
+                      className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                      value={taskForm.assignee}
+                      onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })}
+                    >
+                      <option value="">Unassigned</option>
+                      {(members ?? []).map((m: any) => (
+                        <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
+                      ))}
+                    </select>
+                  )}
 
-                    {assignType === "department" && (
-                        <select
-                            className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
-                            value={taskForm.assigned_department}
-                            onChange={(e) => setTaskForm({ ...taskForm, assigned_department: e.target.value })}
-                        >
-                            <option value="">Select Department</option>
-                            {(departments ?? []).map((d: any) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                            ))}
-                        </select>
-                    )}
+                  {assignType === "team" && (
+                    <select
+                      className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                      value={taskForm.assigned_team}
+                      onChange={(e) => setTaskForm({ ...taskForm, assigned_team: e.target.value })}
+                    >
+                      <option value="">Select Team</option>
+                      {(teams ?? []).map((t: any) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {assignType === "department" && (
+                    <select
+                      className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
+                      value={taskForm.assigned_department}
+                      onChange={(e) => setTaskForm({ ...taskForm, assigned_department: e.target.value })}
+                    >
+                      <option value="">Select Department</option>
+                      {(departments ?? []).map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
-                    <label className="text-xs font-semibold text-muted">Priority</label>
-                    <select
+                  <label className="text-xs font-semibold text-muted">Priority</label>
+                  <select
                     className="w-full rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm"
                     value={taskForm.priority}
                     onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
-                    >
+                  >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
                     <option value="urgent">Urgent</option>
-                    </select>
+                  </select>
                 </div>
-                
+
                 <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Cancel</Button>
-                    <Button type="submit" disabled={createTaskMutation.isPending} className="text-white">
+                  <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createTaskMutation.isPending} className="text-white">
                     {createTaskMutation.isPending ? "Assigning..." : "Assign Task"}
-                    </Button>
+                  </Button>
                 </div>
               </form>
             </Card>
-           </div>
+          </div>
         )}
 
       </div>
