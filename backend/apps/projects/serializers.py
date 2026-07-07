@@ -53,16 +53,34 @@ class ProjectPhaseSerializer(serializers.ModelSerializer):
 class ProjectListSerializer(serializers.ModelSerializer):
     owner_detail = UserListSerializer(source="owner", read_only=True)
     task_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
         fields = (
             "id", "title", "slug", "status", "health", "completion_percentage",
-            "start_date", "end_date", "owner", "owner_detail", "task_count", "created_at",
+            "start_date", "end_date", "owner", "owner_detail", "task_count", "members", "created_at",
         )
 
     def get_task_count(self, obj):
         return obj.tasks.count() if hasattr(obj, "tasks") else 0
+        
+    def get_members(self, obj):
+        # Collect all user IDs involved in the project (owner, explicit members, team leads, team members)
+        user_ids = set()
+        if obj.owner_id:
+            user_ids.add(obj.owner_id)
+            
+        for member in obj.members.all():
+            user_ids.add(member.id)
+            
+        for team in obj.teams.prefetch_related('members'):
+            if team.lead_id:
+                user_ids.add(team.lead_id)
+            for tm in team.members.all():
+                user_ids.add(tm.id)
+                
+        return list(user_ids)
 
 
 class ProjectDetailSerializer(ProjectListSerializer):

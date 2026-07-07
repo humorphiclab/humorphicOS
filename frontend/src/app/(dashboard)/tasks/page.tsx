@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
@@ -28,7 +28,8 @@ export default function TasksPage() {
   const [tab, setTab] = useState<"list" | "kanban" | "create">("list");
   const tabs: ("list" | "kanban" | "create")[] = ["list", "kanban", "create"];
   
-  const [assignType, setAssignType] = useState<"member" | "team" | "department">("member");
+  const [assignType, setAssignType] = useState<"member" | "project" | "department">("member");
+  const [projectTargetType, setProjectTargetType] = useState<"team" | "member">("team");
   
   const [form, setForm] = useState({ 
     title: "", 
@@ -61,6 +62,24 @@ export default function TasksPage() {
     enabled: !!form.project
   });
 
+  // Calculate all unique members involved in the selected project
+  const allProjectMembers = React.useMemo(() => {
+    if (!selectedProjectDetail) return [];
+    
+    const membersMap = new Map();
+    
+    // Add explicit members
+    (selectedProjectDetail.members_detail || []).forEach((m: any) => membersMap.set(m.id, m));
+    
+    // Add team members and leads
+    (selectedProjectDetail.teams_detail || []).forEach((t: any) => {
+        if (t.lead_detail) membersMap.set(t.lead_detail.id, t.lead_detail);
+        (t.members_detail || []).forEach((m: any) => membersMap.set(m.id, m));
+    });
+    
+    return Array.from(membersMap.values());
+  }, [selectedProjectDetail]);
+
   const createTask = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       const task = await tasksApi.create(data);
@@ -80,6 +99,8 @@ export default function TasksPage() {
         assignee: "", assigned_team: "", assigned_department: "",
         project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: ""
       });
+      setAssignType("member");
+      setProjectTargetType("team");
       setAttachments([]);
     },
     onError: (err: any) => {
@@ -119,12 +140,13 @@ export default function TasksPage() {
                   priority: form.priority,
                   status: "todo",
                   ...(isLead && assignType === "member" && form.assignee ? { assignee: Number(form.assignee) } : !isLead && user?.id ? { assignee: user.id } : {}),
-                  ...(isLead && assignType === "team" && form.assigned_team ? { assigned_team: Number(form.assigned_team) } : {}),
+                  ...(isLead && assignType === "project" && projectTargetType === "team" && form.assigned_team ? { assigned_team: Number(form.assigned_team) } : {}),
+                  ...(isLead && assignType === "project" && projectTargetType === "member" && form.assignee ? { assignee: Number(form.assignee) } : {}),
                   ...(isLead && assignType === "department" && form.assigned_department ? { assigned_department: Number(form.assigned_department) } : {}),
-                  ...(form.project ? { project: Number(form.project) } : {}),
-                  ...(form.linked_phase ? { linked_phase: Number(form.linked_phase) } : {}),
-                  ...(form.linked_sub_stage ? { linked_sub_stage: Number(form.linked_sub_stage) } : {}),
-                  ...(form.linked_sub_level ? { linked_sub_level: Number(form.linked_sub_level) } : {}),
+                  ...((form.project && assignType !== "department") ? { project: Number(form.project) } : {}),
+                  ...((form.linked_phase && assignType !== "department") ? { linked_phase: Number(form.linked_phase) } : {}),
+                  ...((form.linked_sub_stage && assignType !== "department") ? { linked_sub_stage: Number(form.linked_sub_stage) } : {}),
+                  ...((form.linked_sub_level && assignType !== "department") ? { linked_sub_level: Number(form.linked_sub_level) } : {}),
                 });
               }}
               className="space-y-4 max-w-2xl"
@@ -143,119 +165,178 @@ export default function TasksPage() {
               {isLead && (
                 <div className="p-4 border rounded-lg bg-card/50">
                     <h4 className="text-sm font-medium mb-3">Assignment Target</h4>
-                    <div className="flex gap-2 mb-3">
-                      <Button type="button" size="sm" variant={assignType === "member" ? "primary" : "secondary"} onClick={() => setAssignType("member")}>Member</Button>
-                      <Button type="button" size="sm" variant={assignType === "team" ? "primary" : "secondary"} onClick={() => setAssignType("team")}>Team</Button>
-                      <Button type="button" size="sm" variant={assignType === "department" ? "primary" : "secondary"} onClick={() => setAssignType("department")}>Department</Button>
+                    <div className="flex gap-2 mb-4 border-b border-card-border pb-3">
+                      <Button type="button" size="sm" variant={assignType === "member" ? "primary" : "secondary"} onClick={() => { setAssignType("member"); setForm({...form, project: "", assignee: ""}); }}>Standalone Member</Button>
+                      <Button type="button" size="sm" variant={assignType === "project" ? "primary" : "secondary"} onClick={() => { setAssignType("project"); setForm({...form, assignee: "", assigned_team: "", assigned_department: ""}); }}>Project Workflow</Button>
+                      <Button type="button" size="sm" variant={assignType === "department" ? "primary" : "secondary"} onClick={() => { setAssignType("department"); setForm({...form, project: "", assignee: "", assigned_team: ""}); }}>Department</Button>
                     </div>
                     
                     {assignType === "member" && (
-                      <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
-                          value={form.assignee}
-                          onChange={(e) => setForm({ ...form, assignee: e.target.value })}
-                      >
-                          <option value="">Unassigned</option>
-                          {(members ?? []).map((m) => (
-                          <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
-                          ))}
-                      </select>
+                      <div className="space-y-1">
+                        <Label>Select Member</Label>
+                        <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
+                            value={form.assignee}
+                            onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                        >
+                            <option value="">Unassigned</option>
+                            {(members ?? []).map((m) => (
+                            <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
+                            ))}
+                        </select>
+                      </div>
                     )}
 
-                    {assignType === "team" && (
-                      <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
-                          value={form.assigned_team}
-                          onChange={(e) => setForm({ ...form, assigned_team: e.target.value })}
-                      >
-                          <option value="">Select Team</option>
-                          {(teams ?? []).map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                      </select>
+                    {assignType === "project" && (
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                            <Label>1. Select Project</Label>
+                            <select
+                                className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
+                                value={form.project}
+                                onChange={(e) => setForm({ ...form, project: e.target.value, assignee: "", assigned_team: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: "" })}
+                            >
+                                <option value="">Select a Project...</option>
+                                {(projects ?? []).map((p) => (
+                                    <option key={p.id} value={p.id}>{p.title}</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        {form.project && (
+                            <div className="pl-4 border-l-2 border-primary/20 space-y-3">
+                                <div>
+                                    <Label className="block mb-2">2. Assign to Project Team or Member</Label>
+                                    <div className="flex gap-2 mb-2">
+                                        <Button type="button" size="sm" className="h-7 text-xs" variant={projectTargetType === "team" ? "primary" : "outline"} onClick={() => { setProjectTargetType("team"); setForm({...form, assignee: ""}); }}>Team</Button>
+                                        <Button type="button" size="sm" className="h-7 text-xs" variant={projectTargetType === "member" ? "primary" : "outline"} onClick={() => { setProjectTargetType("member"); setForm({...form, assigned_team: ""}); }}>Specific Member</Button>
+                                    </div>
+                                    
+                                    {projectTargetType === "team" && (
+                                        <select
+                                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
+                                            value={form.assigned_team}
+                                            onChange={(e) => setForm({ ...form, assigned_team: e.target.value })}
+                                        >
+                                            <option value="">Select Team involved in project...</option>
+                                            {(selectedProjectDetail?.teams_detail ?? []).map((t: any) => (
+                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
+                                        </select>
+                                    )}
+
+                                    {projectTargetType === "member" && (
+                                        <select
+                                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
+                                            value={form.assignee}
+                                            onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                                        >
+                                            <option value="">Select Member involved in project...</option>
+                                            {allProjectMembers.map((m: any) => (
+                                                <option key={m.id} value={m.id}>{m.full_name || (m.first_name + ' ' + m.last_name)}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                      </div>
                     )}
 
                     {assignType === "department" && (
-                      <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
-                          value={form.assigned_department}
-                          onChange={(e) => setForm({ ...form, assigned_department: e.target.value })}
-                      >
-                          <option value="">Select Department</option>
-                          {(departments ?? []).map((d) => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
-                          ))}
-                      </select>
+                      <div className="space-y-1">
+                        <Label>Select Department</Label>
+                        <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
+                            value={form.assigned_department}
+                            onChange={(e) => setForm({ ...form, assigned_department: e.target.value })}
+                        >
+                            <option value="">Select Department...</option>
+                            {(departments ?? []).map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                        </select>
+                      </div>
                     )}
                 </div>
               )}
 
               {/* Project Linkage Controls */}
-              <div className="p-4 border rounded-lg bg-card/50 space-y-3">
-                  <h4 className="text-sm font-medium">Project Linkage (Optional)</h4>
-                  <p className="text-xs text-muted">Completing this task will automatically progress the selected project hierarchy level.</p>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Project</Label>
-                        <select
-                        className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
-                        value={form.project}
-                        onChange={(e) => setForm({ ...form, project: e.target.value, linked_phase: "", linked_sub_stage: "", linked_sub_level: "" })}
-                        >
-                        <option value="">None</option>
-                        {(projects ?? []).map((p) => (
-                            <option key={p.id} value={p.id}>{p.title}</option>
-                        ))}
-                        </select>
-                      </div>
+              {isLead && assignType !== "department" && (
+                  <div className="p-4 border rounded-lg bg-card/50 space-y-3">
+                      <h4 className="text-sm font-medium">Project Linkage (Optional)</h4>
+                      <p className="text-xs text-muted">Completing this task will automatically progress the selected project hierarchy level.</p>
                       
-                      <div>
-                        <Label>Phase</Label>
-                        <select
-                        className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-                        value={form.linked_phase}
-                        onChange={(e) => setForm({ ...form, linked_phase: e.target.value, linked_sub_stage: "", linked_sub_level: "" })}
-                        disabled={!form.project || !selectedProjectDetail?.phases?.length}
-                        >
-                        <option value="">None</option>
-                        {(selectedProjectDetail?.phases ?? []).map((ph: any) => (
-                            <option key={ph.id} value={ph.id}>{ph.title}</option>
-                        ))}
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <Label>Sub Stage</Label>
-                        <select
-                        className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-                        value={form.linked_sub_stage}
-                        onChange={(e) => setForm({ ...form, linked_sub_stage: e.target.value, linked_sub_level: "" })}
-                        disabled={!form.linked_phase}
-                        >
-                        <option value="">None</option>
-                        {(selectedProjectDetail?.phases?.find((p:any) => p.id === Number(form.linked_phase))?.sub_stages ?? []).map((st: any) => (
-                            <option key={st.id} value={st.id}>{st.title}</option>
-                        ))}
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <Label>Sub Level</Label>
-                        <select
-                        className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-                        value={form.linked_sub_level}
-                        onChange={(e) => setForm({ ...form, linked_sub_level: e.target.value })}
-                        disabled={!form.linked_sub_stage}
-                        >
-                        <option value="">None</option>
-                        {(selectedProjectDetail?.phases?.find((p:any) => p.id === Number(form.linked_phase))?.sub_stages?.find((s:any) => s.id === Number(form.linked_sub_stage))?.sub_levels ?? []).map((sl: any) => (
-                            <option key={sl.id} value={sl.id}>{sl.title}</option>
-                        ))}
-                        </select>
+                      <div className="grid grid-cols-2 gap-3">
+                          {assignType === "member" && (
+                              <div>
+                                <Label>Project</Label>
+                                <select
+                                className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                                value={form.project}
+                                onChange={(e) => setForm({ ...form, project: e.target.value, linked_phase: "", linked_sub_stage: "", linked_sub_level: "" })}
+                                disabled={isLead && !form.assignee}
+                                >
+                                <option value="">{(isLead && !form.assignee) ? "Select Member First" : "Select Project..."}</option>
+                                {(projects ?? [])
+                                  .filter((p: any) => {
+                                      const effectiveAssignee = isLead ? form.assignee : String(user?.id);
+                                      return !effectiveAssignee || p.members?.includes(Number(effectiveAssignee));
+                                  })
+                                  .map((p) => (
+                                    <option key={p.id} value={p.id}>{p.title}</option>
+                                ))}
+                                </select>
+                              </div>
+                          )}
+                          
+                          <div>
+                            <Label>Phase</Label>
+                            <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                            value={form.linked_phase}
+                            onChange={(e) => setForm({ ...form, linked_phase: e.target.value, linked_sub_stage: "", linked_sub_level: "" })}
+                            disabled={!form.project || !selectedProjectDetail?.phases?.length}
+                            >
+                            <option value="">None</option>
+                            {(selectedProjectDetail?.phases ?? []).map((ph: any) => (
+                                <option key={ph.id} value={ph.id}>{ph.title}</option>
+                            ))}
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <Label>Sub Stage</Label>
+                            <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                            value={form.linked_sub_stage}
+                            onChange={(e) => setForm({ ...form, linked_sub_stage: e.target.value, linked_sub_level: "" })}
+                            disabled={!form.linked_phase}
+                            >
+                            <option value="">None</option>
+                            {(selectedProjectDetail?.phases?.find((p:any) => p.id === Number(form.linked_phase))?.sub_stages ?? []).map((st: any) => (
+                                <option key={st.id} value={st.id}>{st.title}</option>
+                            ))}
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <Label>Sub Level</Label>
+                            <select
+                            className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                            value={form.linked_sub_level}
+                            onChange={(e) => setForm({ ...form, linked_sub_level: e.target.value })}
+                            disabled={!form.linked_sub_stage}
+                            >
+                            <option value="">None</option>
+                            {(selectedProjectDetail?.phases?.find((p:any) => p.id === Number(form.linked_phase))?.sub_stages?.find((s:any) => s.id === Number(form.linked_sub_stage))?.sub_levels ?? []).map((sl: any) => (
+                                <option key={sl.id} value={sl.id}>{sl.title}</option>
+                            ))}
+                            </select>
+                          </div>
                       </div>
                   </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
