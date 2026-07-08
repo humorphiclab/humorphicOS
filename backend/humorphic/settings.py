@@ -186,8 +186,8 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.
 EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="rohitbasrani32@gmail.com")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="humorphic.labs@gmail.com")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="ikfi uhyj cwqt kxij")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="info@humorphic.in")
 
 SESSION_COOKIE_AGE = 86400
