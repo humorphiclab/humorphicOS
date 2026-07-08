@@ -47,6 +47,7 @@ class Command(BaseCommand):
         if president_role:
             admin.role = president_role
         admin.is_staff = True
+        admin.is_superuser = True
         admin.save()
 
         org, _ = Organization.objects.get_or_create(
