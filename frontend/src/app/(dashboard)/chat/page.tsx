@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
@@ -23,7 +23,7 @@ import {
   Sparkles
 } from "lucide-react";
 
-export default function ChatPage() {
+function ChatPageContent() {
   const qc = useQueryClient();
   const currentUser = getStoredUser();
   const searchParams = useSearchParams();
@@ -612,5 +612,18 @@ export default function ChatPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 flex flex-col justify-center items-center min-h-[50vh] text-muted">
+        <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin mb-4" />
+        <p className="text-sm">Loading Chat...</p>
+      </div>
+    }>
+      <ChatPageContent />
+    </Suspense>
   );
 }
