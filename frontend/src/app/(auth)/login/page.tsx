@@ -53,7 +53,7 @@ export default function LoginPage() {
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage:
-              "url('https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=2000&auto=format&fit=crop')",
+              "url('/robotimagelogin.jpg')",
           }}
         />
         {/* Gradient overlay */}
@@ -175,10 +175,10 @@ export default function LoginPage() {
             )}
 
             <p className="text-center text-xs text-muted-foreground pt-2">
-              Demo:{" "}
-              <span className="text-foreground font-medium">president@humorphic.club</span>{" "}
-              /{" "}
-              <span className="text-foreground font-medium">Demo@12345</span>
+              {" "}
+              <span className="text-foreground font-medium"></span>{" "}
+              {" "}
+              <span className="text-foreground font-medium"></span>
             </p>
           </form>
         </div>

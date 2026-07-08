@@ -134,7 +134,7 @@ export default function RegisterPage() {
       {/* ════ LEFT IMAGE PANE ════ */}
       <aside className="hidden lg:flex w-[45%] shrink-0 flex-col justify-between relative overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=2000&auto=format&fit=crop')" }} />
+          style={{ backgroundImage: "url('/robotimagelogin.jpg')" }} />
         <div className="absolute inset-0 bg-linear-to-br from-black/85 via-black/55 to-primary/40" />
 
         <div className="relative z-10 p-10">
