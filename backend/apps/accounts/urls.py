@@ -13,6 +13,7 @@ from .views import (
     RolesListView,
     UserDetailView,
     UserListView,
+    UserProfileUpdateView,
     UserRoleUpdateView,
 )
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path("google/", GoogleLoginView.as_view(), name="google-login"),
     path("config/", AuthConfigView.as_view(), name="auth-config"),
     path("me/", MeView.as_view(), name="me"),
+    path("me/profile/", UserProfileUpdateView.as_view(), name="me-profile"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
     path("permissions/", PermissionsView.as_view(), name="permissions"),
     path("roles/", RolesListView.as_view(), name="roles"),

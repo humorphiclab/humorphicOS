@@ -56,8 +56,8 @@ class Command(BaseCommand):
             email="president@humorphic.club",
             defaults={"username": "president", "first_name": "Club", "last_name": "President"},
         )
-        if not admin.has_usable_password():
-            admin.set_password("Demo@12345")
+        # Always set the demo password so re-running seed never leaves unknown credentials
+        admin.set_password("Demo@12345")
         president_role = Role.objects.filter(slug="president").first()
         if president_role:
             admin.role = president_role

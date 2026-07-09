@@ -1,5 +1,18 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+/** Converts a DRF error response (could be field-level dict, array, or plain string) into a human-readable message. */
+function parseDRFError(error: Record<string, unknown>): string {
+  if (typeof error.detail === "string") return error.detail;
+  if (typeof error.message === "string") return error.message;
+  // Field-level errors: { fieldName: ["msg1", "msg2"], ... } or { fieldName: "msg" }
+  const parts: string[] = [];
+  for (const [field, value] of Object.entries(error)) {
+    const msgs = Array.isArray(value) ? value.join(", ") : String(value);
+    parts.push(field === "non_field_errors" ? msgs : `${field}: ${msgs}`);
+  }
+  return parts.join(" | ") || "Request failed";
+}
+
 export async function publicFetch<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -22,13 +35,21 @@ export interface User {
   full_name: string;
   is_superuser?: boolean;
   phone?: string;
+  avatar?: string | null;
   role?: { id: number; name: string; slug: string; is_leadership: boolean };
   college?: string;
   branch?: string;
+  batch?: string;
   year?: string;
   skills?: string[];
   github?: string;
   linkedin?: string;
+  portfolio?: string;
+  bio?: string;
+  enrollment_number?: string;
+  is_email_verified?: boolean;
+  last_active?: string | null;
+  date_joined?: string;
 }
 
 export interface Paginated<T> {
@@ -104,7 +125,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Request failed" }));
-    throw new Error(error.detail || error.message || "Request failed");
+    throw new Error(parseDRFError(error));
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -133,6 +154,8 @@ export const authApi = {
   me: () => apiFetch<User>("/auth/me/"),
   updateMe: (data: FormData | Record<string, any>) =>
     apiFetch<User>("/auth/me/", { method: "PATCH", body: data instanceof FormData ? data : JSON.stringify(data) }),
+  updateProfile: (data: FormData | Record<string, any>) =>
+    apiFetch<User>("/auth/me/profile/", { method: "PATCH", body: data instanceof FormData ? data : JSON.stringify(data) }),
   permissions: () => apiFetch<PermissionsPayload>("/auth/permissions/"),
   roles: () => list<Role>("/auth/roles/"),
   updateUserRole: (userId: number, roleId: number) =>
@@ -262,6 +285,7 @@ export const announcementsApi = {
 
 export const notificationsApi = {
   list: () => list<Notification>("/notifications/"),
+  read: (id: number) => apiFetch<Notification>(`/notifications/${id}/read/`, { method: "POST" }),
   unreadCount: () => apiFetch<{ count: number }>("/notifications/unread_count/"),
   readAll: () => apiFetch<{ marked_read: number }>("/notifications/read_all/", { method: "POST" }),
   getPreferences: () => apiFetch<NotificationPreference>("/notifications/preferences/"),

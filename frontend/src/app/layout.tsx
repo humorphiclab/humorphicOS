@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
+
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "HumorphicOS" },
 };
 
+import { Toaster } from 'sonner';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,7 +36,6 @@ export default function RootLayout({
     >
       <head>
         <script
-          id="theme-script"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -49,6 +50,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full">
         <Providers>{children}</Providers>
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

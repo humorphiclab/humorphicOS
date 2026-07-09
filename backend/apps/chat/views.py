@@ -149,6 +149,18 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
                 return
 
         serializer.save(sender=self.request.user)
+        
+        # Notify receiver
+        from apps.notifications.services import send_notification_to_user
+        receiver = serializer.instance.receiver
+        send_notification_to_user(
+            user=receiver,
+            pref_key="messages",
+            title="New Friend Request",
+            message=f"{self.request.user.get_full_name() or self.request.user.email} sent you a friend request.",
+            link="/chat",
+            priority="normal"
+        )
 
     @action(detail=True, methods=["post"])
     def respond(self, request, pk=None):
@@ -162,6 +174,16 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
 
         if action_choice == "accept":
             friend_request.status = FriendRequest.Status.ACCEPTED
+            # Notify sender
+            from apps.notifications.services import send_notification_to_user
+            send_notification_to_user(
+                user=friend_request.sender,
+                pref_key="messages",
+                title="Friend Request Accepted",
+                message=f"{request.user.get_full_name() or request.user.email} accepted your friend request.",
+                link="/chat",
+                priority="normal"
+            )
         else:
             friend_request.status = FriendRequest.Status.REJECTED
 

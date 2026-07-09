@@ -1,3 +1,7 @@
 [tool.pyrefly]
 search_path = ["backend"]
 python_interpreter = "backend/venv/Scripts/python.exe"
+
+[tool.pyright]
+extraPaths = ["backend"]
+plugins = ["django_stubs"]

@@ -50,8 +50,12 @@ const LinkedTasks = ({ tasks }: { tasks?: any[] }) => {
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
-  const currentUser = getStoredUser();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, []);
   const isSuperuser = currentUser?.is_superuser;
+  const isLead = currentUser?.is_superuser || currentUser?.role?.is_leadership || currentUser?.role?.slug === "team_lead" || currentUser?.role?.slug === "department_head" || false;
 
   const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -81,6 +85,7 @@ export default function ProjectsPage() {
   const [newTeamDescription, setNewTeamDescription] = useState("");
   const [newTeamLead, setNewTeamLead] = useState("");
   const [teamMemberToAdd, setTeamMemberToAdd] = useState("");
+  const [showCreateTeam, setShowCreateTeam] = useState(false);
 
   const [taskForm, setTaskForm] = useState({
     title: "",
@@ -155,8 +160,13 @@ export default function ProjectsPage() {
     mutationFn: (data: any) => apiFetch("/tasks/", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       setIsTaskModalOpen(false);
       setTaskForm({ title: "", description: "", priority: "medium", assignee: "", assigned_team: "", assigned_department: "", project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: "" });
+    },
+    onError: (err: any) => {
+      alert(err.message || "Failed to assign task");
     },
   });
 
@@ -270,6 +280,14 @@ export default function ProjectsPage() {
     },
   });
 
+  const updateProjectMembersMutation = useMutation({
+    mutationFn: ({ slug, members }: { slug: string; members: number[] }) =>
+      projectsApi.update(slug, { members }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+    },
+  });
+
   // Handlers
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -324,7 +342,7 @@ export default function ProjectsPage() {
       description: newTeamDescription,
       project: projectDetail.id,
       lead: newTeamLead ? Number(newTeamLead) : null,
-      members: [],
+      members: newTeamLead ? [Number(newTeamLead)] : [],
     });
   };
 
@@ -955,46 +973,55 @@ export default function ProjectsPage() {
 
                                 {/* Create Team form (always below Project Card / sub-column) */}
                                 {isSuperuser && (
-                                  <form onSubmit={handleCreateTeam} className="p-3 border border-white/5 bg-white/2 rounded-xl space-y-3 mt-auto">
-                                    <h4 className="text-[10px] font-bold text-white uppercase tracking-wider">Create New Team</h4>
-                                    <div className="space-y-2">
-                                      <div className="space-y-0.5">
-                                        <label className="text-[9px] font-bold text-muted uppercase">Team Name</label>
-                                        <Input
-                                          value={newTeamName}
-                                          onChange={(e) => setNewTeamName(e.target.value)}
-                                          placeholder="e.g. Software, CAD, Electrical"
-                                          className="h-7 text-xs"
-                                          required
-                                        />
+                                  showCreateTeam ? (
+                                    <form onSubmit={handleCreateTeam} className="p-3 border border-white/5 bg-white/2 rounded-xl space-y-3 mt-auto">
+                                      <div className="flex justify-between items-center">
+                                        <h4 className="text-[10px] font-bold text-white uppercase tracking-wider">Create New Team</h4>
+                                        <button type="button" onClick={() => setShowCreateTeam(false)} className="text-muted hover:text-white"><X size={12}/></button>
                                       </div>
-                                      <div className="space-y-0.5">
-                                        <label className="text-[9px] font-bold text-muted uppercase">Team Lead</label>
-                                        <select
-                                          value={newTeamLead}
-                                          onChange={(e) => setNewTeamLead(e.target.value)}
-                                          className="w-full h-7 rounded border border-card-border bg-card px-2 text-[10px] text-foreground focus:outline-none"
-                                        >
-                                          <option value="">Select Team Lead...</option>
-                                          {members.map((m: any) => (
-                                            <option key={m.id} value={m.id}>{m.full_name}</option>
-                                          ))}
-                                        </select>
+                                      <div className="space-y-2">
+                                        <div className="space-y-0.5">
+                                          <label className="text-[9px] font-bold text-muted uppercase">Team Name</label>
+                                          <Input
+                                            value={newTeamName}
+                                            onChange={(e) => setNewTeamName(e.target.value)}
+                                            placeholder="e.g. Software, CAD, Electrical"
+                                            className="h-7 text-xs"
+                                            required
+                                          />
+                                        </div>
+                                        <div className="space-y-0.5">
+                                          <label className="text-[9px] font-bold text-muted uppercase">Team Lead</label>
+                                          <select
+                                            value={newTeamLead}
+                                            onChange={(e) => setNewTeamLead(e.target.value)}
+                                            className="w-full h-7 rounded border border-card-border bg-card px-2 text-[10px] text-foreground focus:outline-none"
+                                          >
+                                            <option value="">Select Team Lead...</option>
+                                            {members.map((m: any) => (
+                                              <option key={m.id} value={m.id}>{m.full_name}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                          <label className="text-[9px] font-bold text-muted uppercase">Description</label>
+                                          <Input
+                                            value={newTeamDescription}
+                                            onChange={(e) => setNewTeamDescription(e.target.value)}
+                                            placeholder="Optional..."
+                                            className="h-7 text-xs"
+                                          />
+                                        </div>
                                       </div>
-                                      <div className="space-y-0.5">
-                                        <label className="text-[9px] font-bold text-muted uppercase">Description</label>
-                                        <Input
-                                          value={newTeamDescription}
-                                          onChange={(e) => setNewTeamDescription(e.target.value)}
-                                          placeholder="Optional..."
-                                          className="h-7 text-xs"
-                                        />
-                                      </div>
-                                    </div>
-                                    <Button type="submit" size="sm" disabled={createTeamMutation.isPending} className="h-7 w-full text-white flex items-center justify-center gap-1">
-                                      <Plus size={12} /> Create Team
+                                      <Button type="submit" size="sm" disabled={createTeamMutation.isPending} className="h-7 w-full text-white flex items-center justify-center gap-1">
+                                        <Plus size={12} /> Create Team
+                                      </Button>
+                                    </form>
+                                  ) : (
+                                    <Button type="button" onClick={() => setShowCreateTeam(true)} variant="outline" className="w-full mt-auto h-8 text-xs border-dashed border-white/20 text-muted hover:text-white flex items-center justify-center gap-1">
+                                      <Plus size={12} /> Create Sub-Team
                                     </Button>
-                                  </form>
+                                  )
                                 )}
                               </div>
 
@@ -1038,6 +1065,24 @@ export default function ProjectsPage() {
                                               }}
                                               className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
                                               title="Remove from Team"
+                                            >
+                                              <UserMinus size={13} />
+                                            </button>
+                                          )}
+                                          {selectedTeamIdForMembers === "project" && isSuperuser && (
+                                            <button
+                                              onClick={() => {
+                                                if (confirm(`Remove ${m.full_name} from the entire project? (They will also be removed from any sub-teams they belong to in this project).`)) {
+                                                  updateProjectMembersMutation.mutate({
+                                                    slug: projectDetail.slug,
+                                                    members: projectDetail.members.filter((id: number) => id !== m.id),
+                                                  });
+                                                  // Optional: If you wanted to remove them from all teams on the frontend concurrently, 
+                                                  // you could trigger updateTeamMembersMutation for each team they are in.
+                                                }
+                                              }}
+                                              className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                                              title="Remove from Project"
                                             >
                                               <UserMinus size={13} />
                                             </button>

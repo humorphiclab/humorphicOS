@@ -36,10 +36,16 @@ export default function MySpacePage() {
 
   const isLoading = deptsLoading || teamsLoading;
 
-  const myDepts = departments.filter((d: any) => d.members?.includes(currentUser?.id) || d.head === currentUser?.id);
-  const myTeams = teams.filter((t: any) => t.members?.includes(currentUser?.id) || t.lead === currentUser?.id);
+  const myDepts = departments.filter((d: any) => d.members?.includes(Number(currentUser?.id)) || d.head === Number(currentUser?.id));
+  const myTeams = teams.filter((t: any) => t.members?.includes(Number(currentUser?.id)) || t.lead === Number(currentUser?.id));
   const otherDepts = departments.filter((d: any) => !myDepts.find((m: any) => m.id === d.id));
   const otherTeams = teams.filter((t: any) => !myTeams.find((m: any) => m.id === t.id));
+  
+  const myProjects = projects.filter((p: any) => 
+    p.owner === Number(currentUser?.id) || 
+    p.members?.includes(Number(currentUser?.id)) ||
+    myTeams.some((t: any) => t.project === p.id)
+  );
 
   const joinDeptMutation = useMutation({
     mutationFn: (slug: string) => departmentsApi.join(slug),
@@ -67,7 +73,7 @@ export default function MySpacePage() {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-black text-white">Welcome back, {currentUser?.first_name || "Member"} 👋</h1>
-            <p className="text-muted text-sm mt-1">Your departments, teams, and projects — all in one place.</p>
+            <p className="text-muted text-sm mt-1">Your projects, teams, and departments — all in one place.</p>
           </div>
           <Button onClick={() => setShowBrowse(true)} className="flex items-center gap-2 text-white bg-primary">
             <LogIn size={16} /> Explore & Join
@@ -105,7 +111,7 @@ export default function MySpacePage() {
                     >
                       <div className="flex justify-between items-start mb-3">
                         <h3 className="font-bold text-white group-hover:text-primary transition-colors">{dept.name}</h3>
-                        {dept.head === currentUser?.id && (
+                        {dept.head === Number(currentUser?.id) && (
                           <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full font-semibold">
                             <Crown size={10} /> Head
                           </span>
@@ -130,6 +136,48 @@ export default function MySpacePage() {
                           {dept.members_detail.length > 5 && <div className="h-6 w-6 rounded-full bg-muted border-2 border-card text-[9px] text-white flex items-center justify-center">+{dept.members_detail.length - 5}</div>}
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* My Projects */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 border-b border-card-border pb-3">
+                <Briefcase size={18} className="text-amber-400" />
+                <h2 className="text-base font-bold">My Projects</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 font-semibold">{myProjects.length}</span>
+              </div>
+              {myProjects.length === 0 ? (
+                <Card className="p-8 text-center border-dashed">
+                  <Briefcase size={32} className="text-muted/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted">You are not involved in any projects.</p>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {myProjects.map((project: any) => (
+                    <div
+                      key={project.id}
+                      onClick={() => window.location.href = `/projects?select=${project.slug}`}
+                      className="group relative overflow-hidden rounded-xl border border-card-border bg-card p-5 cursor-pointer hover:border-amber-400/50 hover:-translate-y-0.5 transition-all duration-200"
+                      style={{ borderTop: "3px solid #fbbf24" }}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="font-bold text-white group-hover:text-amber-400 transition-colors line-clamp-1">{project.title}</h3>
+                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full border font-semibold whitespace-nowrap", healthColors[project.health] || "text-muted border-muted")}>
+                          {project.health?.replace("_", " ").toUpperCase() || "UNKNOWN"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted line-clamp-2 mb-4">{project.description || "No description."}</p>
+                      
+                      <div className="flex items-center justify-between border-t border-card-border pt-3">
+                        <div className="flex items-center gap-1 text-xs text-muted">
+                          <CheckCircle2 size={12} className="text-emerald-400" />
+                          <span>{project.completion_percentage || 0}% Done</span>
+                        </div>
+                        <ChevronRight size={14} className="text-muted group-hover:text-amber-400 transition-colors" />
+                      </div>
                     </div>
                   ))}
                 </div>

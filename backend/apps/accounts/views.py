@@ -39,8 +39,8 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
+        email = request.data.get("email", "").strip()
+        password = request.data.get("password", "")
         if not email or not password:
             return Response(
                 {"detail": "Email and password are required."},
@@ -98,6 +98,11 @@ class UserListView(generics.ListAPIView):
     filterset_fields = ("role", "batch", "branch")
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
 
 
 class UserDetailView(generics.RetrieveAPIView):
@@ -105,6 +110,20 @@ class UserDetailView(generics.RetrieveAPIView):
     serializer_class = UserDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+
+class UserProfileUpdateView(generics.UpdateAPIView):
+    """PATCH /auth/me/profile/ – allows authenticated users to update their own profile."""
+    serializer_class = UserUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["patch", "options"]
+
+    def get_object(self):
+        return self.request.user
 
 
 class UserRoleUpdateView(APIView):
