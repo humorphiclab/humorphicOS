@@ -88,8 +88,57 @@ class TaskSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        validated_data["assigned_by"] = self.context["request"].user
-        return super().create(validated_data)
+        user = self.context["request"].user
+        validated_data["assigned_by"] = user
+        # Auto-assign to the requesting user if they are a general member and no assignee is set
+        if not validated_data.get("assignee") and not validated_data.get("assigned_team") and not validated_data.get("assigned_department"):
+            if not user.is_superuser and getattr(user.role, "slug", "") not in ["super_admin", "president", "vice_president", "faculty"]:
+                validated_data["assignee"] = user
+                
+        task = super().create(validated_data)
+        
+        # Notify the assignee if it's someone else
+        assignee = task.assignee
+        if assignee and assignee != user:
+            from apps.notifications.services import send_notification_to_user
+            send_notification_to_user(
+                user=assignee,
+                pref_key="task_assigned",
+                title="New Task Assigned",
+                message=f"You have been assigned a new task: {task.title}",
+                link="/tasks",
+                priority="high"
+            )
+            
+        # Notify team or department if assigned to a group (optional, but good for completeness)
+        if task.assigned_team:
+            from apps.notifications.services import send_notification_to_user
+            for member in task.assigned_team.members.all():
+                if member != user:
+                    send_notification_to_user(
+                        user=member,
+                        pref_key="task_assigned",
+                        title="New Team Task Assigned",
+                        message=f"Your team '{task.assigned_team.name}' has been assigned a new task: {task.title}",
+                        link="/tasks",
+                        priority="normal"
+                    )
+                    
+        if task.assigned_department:
+            from apps.notifications.services import send_notification_to_user
+            # For department, we might notify department head or all members. Let's notify the head for now.
+            head = task.assigned_department.head
+            if head and head != user:
+                send_notification_to_user(
+                    user=head,
+                    pref_key="task_assigned",
+                    title="New Department Task Assigned",
+                    message=f"Your department '{task.assigned_department.name}' has been assigned a new task: {task.title}",
+                    link="/tasks",
+                    priority="normal"
+                )
+                
+        return task
 
 
 class TaskCommentCreateSerializer(serializers.ModelSerializer):

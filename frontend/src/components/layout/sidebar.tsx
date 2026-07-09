@@ -95,6 +95,7 @@ export function Sidebar() {
   };
 
   const visible = (item: { resource: string; leadership?: boolean }) => {
+    if (user?.is_superuser) return true;
     if (item.resource === "dashboard" || item.resource === "notifications") return true;
     return canAccessNav(permData?.permissions, item.resource, permData?.is_leadership);
   };
@@ -115,7 +116,7 @@ export function Sidebar() {
 
       <nav className="flex-1 p-2 overflow-y-auto space-y-4">
         {navSections.map((section) => {
-          const items = section.items.filter(visible);
+          const items = mounted ? section.items.filter(visible) : [];
           if (!items.length) return null;
           return (
             <div key={section.label}>

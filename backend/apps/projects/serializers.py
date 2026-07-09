@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
-from apps.accounts.serializers import UserListSerializer
-from apps.departments.serializers import DepartmentSerializer
-from apps.teams.serializers import TeamSerializer
+from ..accounts.serializers import UserListSerializer
+from ..departments.serializers import DepartmentSerializer
+from ..teams.serializers import TeamSerializer
 
 from .models import Project, ProjectPhase, SubStage, SubLevel
 
@@ -83,14 +83,57 @@ class ProjectListSerializer(serializers.ModelSerializer):
         return list(user_ids)
 
 
-class ProjectDetailSerializer(ProjectListSerializer):
+class ProjectDetailSerializer(serializers.ModelSerializer):
+    owner_detail = UserListSerializer(source="owner", read_only=True)
+    task_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
     phases = ProjectPhaseSerializer(many=True, read_only=True)
     teams_detail = TeamSerializer(source="teams", many=True, read_only=True)
     department_detail = DepartmentSerializer(source="department", read_only=True)
     members_detail = UserListSerializer(source="members", many=True, read_only=True)
 
-    class Meta(ProjectListSerializer.Meta):
-        fields = ProjectListSerializer.Meta.fields + (
-            "description", "teams_detail", "department", "department_detail",
-            "members", "members_detail", "phases", "updated_at",
+    class Meta:
+        model = Project
+        fields = (
+            "id",
+            "title",
+            "slug",
+            "status",
+            "health",
+            "completion_percentage",
+            "start_date",
+            "end_date",
+            "owner",
+            "owner_detail",
+            "task_count",
+            "members",
+            "created_at",
+            "description",
+            "teams_detail",
+            "department",
+            "department_detail",
+            "members_detail",
+            "phases",
+            "updated_at",
         )
+
+    def get_task_count(self, obj):
+        return obj.tasks.count() if hasattr(obj, "tasks") else 0
+        
+    def get_members(self, obj):
+        user_ids = set()
+        if obj.owner_id:
+            user_ids.add(obj.owner_id)
+            
+        for member in obj.members.all():
+            user_ids.add(member.id)
+            
+        for team in obj.teams.prefetch_related('members'):
+            if team.lead_id:
+                user_ids.add(team.lead_id)
+            for tm in team.members.all():
+                user_ids.add(tm.id)
+                
+        return list(user_ids)
+
+

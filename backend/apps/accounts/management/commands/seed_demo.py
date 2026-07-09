@@ -2,20 +2,35 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import timedelta
 
+# pyrefly: ignore [missing-import]
 from apps.accounts.models import Role, User
+# pyrefly: ignore [missing-import]
 from apps.departments.models import Department
+# pyrefly: ignore [missing-import]
 from apps.teams.models import Team
+# pyrefly: ignore [missing-import]
 from apps.projects.models import Project
+# pyrefly: ignore [missing-import]
 from apps.tasks.models import Task
+# pyrefly: ignore [missing-import]
 from apps.announcements.models import Announcement
+# pyrefly: ignore [missing-import]
 from apps.gamification.models import Badge, UserProfile
+# pyrefly: ignore [missing-import]
 from apps.inventory.models import Component, Equipment
+# pyrefly: ignore [missing-import]
 from apps.knowledge.models import KnowledgeArticle
+# pyrefly: ignore [missing-import]
 from apps.events.models import Event
+# pyrefly: ignore [missing-import]
 from apps.organizations.models import Organization, OrganizationMember
+# pyrefly: ignore [missing-import]
 from apps.meetings.models import Meeting
+# pyrefly: ignore [missing-import]
 from apps.attendance.models import Holiday
+# pyrefly: ignore [missing-import]
 from apps.chat.models import Channel
+# pyrefly: ignore [missing-import]
 from apps.certificates.models import CertificateTemplate
 
 
@@ -41,8 +56,8 @@ class Command(BaseCommand):
             email="president@humorphic.club",
             defaults={"username": "president", "first_name": "Club", "last_name": "President"},
         )
-        if not admin.has_usable_password():
-            admin.set_password("Demo@12345")
+        # Always set the demo password so re-running seed never leaves unknown credentials
+        admin.set_password("Demo@12345")
         president_role = Role.objects.filter(slug="president").first()
         if president_role:
             admin.role = president_role
@@ -59,7 +74,7 @@ class Command(BaseCommand):
         ai_dept = Department.objects.get(slug="ai")
         team, _ = Team.objects.get_or_create(
             slug="ai-core",
-            defaults={"name": "AI Core Team", "department": ai_dept, "lead": admin},
+            defaults={"name": "AI Core Team", "lead": admin},
         )
         team.members.add(admin)
 
@@ -68,11 +83,13 @@ class Command(BaseCommand):
             defaults={
                 "title": "Autonomous Rover",
                 "description": "Build an autonomous navigation rover using computer vision.",
-                "owner": admin, "team": team, "department": ai_dept,
+                "owner": admin, "department": ai_dept,
                 "status": "active", "health": "on_track", "completion_percentage": 35,
             },
         )
         project.members.add(admin)
+        team.project = project
+        team.save()
 
         Task.objects.get_or_create(
             title="Setup ROS2 environment",

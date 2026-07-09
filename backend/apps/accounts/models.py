@@ -1,11 +1,31 @@
+import re
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
+
+
+def validate_enrollment_number(value: str):
+    """Validate enrollment number: exactly 12 chars, positions 5-6 (branch) must be alphabetic."""
+    if not value:
+        return  # blank is allowed at model level; required enforcement happens in serializer
+    if len(value) != 12:
+        raise ValidationError(
+            "Enrollment number must be exactly 12 characters long.",
+            code="enrollment_length",
+        )
+    branch_digits = value[4:6]  # positions 5-6 (0-indexed 4:6)
+    if not branch_digits.isalpha():
+        raise ValidationError(
+            "Characters 5-6 of the enrollment number (branch code) must be alphabetic letters.",
+            code="enrollment_branch",
+        )
 
 
 class Role(models.Model):
     """RBAC role with slug-based identification."""
 
     class Slug(models.TextChoices):
+        FOUNDER = "founder", "Founder"
         SUPER_ADMIN = "super_admin", "Super Admin"
         PRESIDENT = "president", "President"
         VICE_PRESIDENT = "vice_president", "Vice President"
@@ -56,7 +76,12 @@ class Permission(models.Model):
 class User(AbstractUser):
     """Extended user model for club members."""
 
-    enrollment_number = models.CharField(max_length=50, blank=True)
+    enrollment_number = models.CharField(
+        max_length=12,
+        blank=True,
+        validators=[validate_enrollment_number],
+        help_text="12-character code: 4 college + 2 alpha branch + 2 year + 4 number. E.g. 0612IA240001",
+    )
 
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -88,6 +113,15 @@ class User(AbstractUser):
     @property
     def full_name(self):
         return self.get_full_name()
+
+    def save(self, *args, **kwargs):
+        if self.role and self.role.slug in ["founder", "super_admin", "president"]:
+            dup_query = User.objects.filter(role=self.role).exclude(pk=self.pk)
+            if dup_query.filter(is_active=True).exists():
+                raise ValidationError(
+                    f"There can only be one active user with the role '{self.role.name}'."
+                )
+        super().save(*args, **kwargs)
 
     def has_permission(self, resource: str, action: str) -> bool:
         if self.is_superuser:

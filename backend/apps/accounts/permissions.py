@@ -42,3 +42,18 @@ class IsLeadership(BasePermission):
         if request.user.is_superuser:
             return True
         return bool(getattr(request.user.role, "is_leadership", False))
+
+
+class CanManageLlm(BasePermission):
+    """
+    Allow access to LLM features only for Faculty and above (priority >= 70).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        if not request.user.role:
+            return False
+        return request.user.role.priority >= 70

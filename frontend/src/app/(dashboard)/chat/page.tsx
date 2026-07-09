@@ -7,7 +7,7 @@ import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { chatApi, getStoredUser, User, apiFetch, FriendRequest } from "@/lib/api";
+import { chatApi, getStoredUser, User, apiFetch, FriendRequest, getImageUrl } from "@/lib/api";
 import {
   MessageSquare,
   Users,
@@ -339,9 +339,13 @@ function ChatPageContent() {
                               className="rounded-lg p-2.5 border border-card-border/30 bg-muted/10 flex flex-col space-y-2 hover:bg-muted/25 transition-all"
                             >
                               <div className="flex items-center gap-2">
-                                <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                                  {u.first_name[0]}{u.last_name[0]}
-                                </div>
+                                {u.avatar ? (
+                                  <img src={getImageUrl(u.avatar) as string} alt="Avatar" className="h-7 w-7 rounded-full object-cover shrink-0" />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                                    {u.first_name[0]}{u.last_name[0]}
+                                  </div>
+                                )}
                                 <div className="truncate flex-1">
                                   <p className="font-semibold text-xs leading-none text-foreground">
                                     {u.first_name} {u.last_name}
@@ -433,9 +437,13 @@ function ChatPageContent() {
                               : "hover:bg-card-border/30 text-muted hover:text-foreground"
                           }`}
                         >
-                          <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-                            {u.first_name[0]}{u.last_name[0]}
-                          </div>
+                          {u.avatar ? (
+                            <img src={getImageUrl(u.avatar) as string} alt="Avatar" className="h-7 w-7 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                              {u.first_name[0]}{u.last_name[0]}
+                            </div>
+                          )}
                           <div className="truncate">
                             <p className="font-semibold text-xs leading-none text-foreground">{u.first_name} {u.last_name}</p>
                             <p className="text-[10px] text-muted leading-none mt-1">{u.role?.name || "Member"}</p>

@@ -28,3 +28,19 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def unread_count(self, request):
         count = self.get_queryset().filter(is_read=False).count()
         return Response({"count": count})
+
+    @action(detail=False, methods=["get", "put", "patch"], url_path="preferences")
+    def preferences(self, request):
+        from .models import NotificationPreference
+        from .serializers import NotificationPreferenceSerializer
+
+        prefs, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        if request.method in ["PUT", "PATCH"]:
+            serializer = NotificationPreferenceSerializer(prefs, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        
+        serializer = NotificationPreferenceSerializer(prefs)
+        return Response(serializer.data)
+

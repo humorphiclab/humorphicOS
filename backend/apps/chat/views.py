@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import serializers
 
-from apps.accounts.rbac import RBACMixin
+from apps.accounts.rbac import RBACMixin  # type: ignore
 
 from .models import Channel, ChannelMessage, DirectMessage, FriendRequest
 from .serializers import (
@@ -18,7 +18,7 @@ from .serializers import (
 class ChannelViewSet(RBACMixin, viewsets.ModelViewSet):
     rbac_resource = "chat"
     rbac_action_map = {"messages": "create"}
-    queryset = Channel.objects.select_related("created_by", "team", "department").prefetch_related("members")
+    queryset = Channel.objects.select_related("created_by", "team", "department").prefetch_related("members")  # type: ignore
     serializer_class = ChannelSerializer
     lookup_field = "slug"
 
@@ -50,7 +50,7 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return DirectMessage.objects.filter(
+        return DirectMessage.objects.filter(  # type: ignore
             Q(sender=user) | Q(recipient=user)
         ).select_related("sender", "recipient")
 
@@ -59,11 +59,11 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
         other_id = request.query_params.get("user")
         if not other_id:
             return Response({"detail": "user param required."}, status=400)
-        msgs = DirectMessage.objects.filter(
+        msgs = DirectMessage.objects.filter(  # type: ignore
             Q(sender=request.user, recipient_id=other_id)
             | Q(sender_id=other_id, recipient=request.user)
         ).select_related("sender", "recipient").order_by("created_at")
-        DirectMessage.objects.filter(
+        DirectMessage.objects.filter(  # type: ignore
             sender_id=other_id, recipient=request.user, is_read=False
         ).update(is_read=True)
         return Response(DirectMessageSerializer(msgs, many=True).data)
@@ -73,7 +73,7 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
         user = request.user
         
         # If user is admin/superuser, they can chat with everyone in the club
-        is_admin = user.is_superuser or (user.role and user.role.slug in ("super_admin", "president"))
+        is_admin = user.is_superuser or (user.role and user.role.slug in ("super_admin", "president", "vice_president", "faculty"))
         if is_admin:
             from apps.accounts.models import User as ClubUser
             users = ClubUser.objects.filter(is_active=True).exclude(id=user.id).select_related("role")
@@ -95,7 +95,7 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
         # 2. All admins / superusers
         from apps.accounts.models import User as ClubUser
         admins = ClubUser.objects.filter(
-            Q(is_superuser=True) | Q(role__slug__in=("super_admin", "president")),
+            Q(is_superuser=True) | Q(role__slug__in=("super_admin", "president", "vice_president", "faculty")),
             is_active=True
         ).exclude(id=user.id)
         
@@ -149,6 +149,18 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
                 return
 
         serializer.save(sender=self.request.user)
+        
+        # Notify receiver
+        from apps.notifications.services import send_notification_to_user
+        receiver = serializer.instance.receiver
+        send_notification_to_user(
+            user=receiver,
+            pref_key="messages",
+            title="New Friend Request",
+            message=f"{self.request.user.get_full_name() or self.request.user.email} sent you a friend request.",
+            link="/chat",
+            priority="normal"
+        )
 
     @action(detail=True, methods=["post"])
     def respond(self, request, pk=None):
@@ -162,6 +174,16 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
 
         if action_choice == "accept":
             friend_request.status = FriendRequest.Status.ACCEPTED
+            # Notify sender
+            from apps.notifications.services import send_notification_to_user
+            send_notification_to_user(
+                user=friend_request.sender,
+                pref_key="messages",
+                title="Friend Request Accepted",
+                message=f"{request.user.get_full_name() or request.user.email} accepted your friend request.",
+                link="/chat",
+                priority="normal"
+            )
         else:
             friend_request.status = FriendRequest.Status.REJECTED
 

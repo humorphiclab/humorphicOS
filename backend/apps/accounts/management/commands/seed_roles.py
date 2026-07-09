@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
 
+# pyrefly: ignore [missing-import]
 from apps.accounts.models import Permission, Role
 
 
 DEFAULT_ROLES = [
+    {"name": "Founder", "slug": "founder", "is_leadership": True, "priority": 110},
     {"name": "Super Admin", "slug": "super_admin", "is_leadership": True, "priority": 100},
     {"name": "President", "slug": "president", "is_leadership": True, "priority": 90},
     {"name": "Vice President", "slug": "vice_president", "is_leadership": True, "priority": 80},
@@ -42,7 +44,7 @@ class Command(BaseCommand):
 
             Permission.objects.filter(role=role).delete()
 
-            if role.slug in ("super_admin", "president", "vice_president", "faculty"):
+            if role.slug in ("founder", "super_admin", "president", "vice_president", "faculty"):
                 resources = LEADERSHIP_RESOURCES
                 actions = LEADERSHIP_ACTIONS
             elif role.slug == "team_lead":

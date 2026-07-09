@@ -24,7 +24,7 @@ const statusColors: Record<string, string> = {
 export default function TasksPage() {
   const qc = useQueryClient();
   const user = getStoredUser();
-  const isLead = user?.is_superuser || user?.role?.is_leadership || false;
+  const isLead = user?.is_superuser || user?.role?.is_leadership || user?.role?.slug === "team_lead" || user?.role?.slug === "department_head" || false;
 
   const [tab, setTab] = useState<"list" | "kanban" | "create">("list");
   const tabs: ("list" | "kanban" | "create")[] = ["list", "kanban", "create"];

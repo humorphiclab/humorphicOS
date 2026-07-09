@@ -52,6 +52,8 @@ class ChannelMessage(models.Model):
 
 
 class FriendRequest(models.Model):
+    objects = models.Manager()
+
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         ACCEPTED = "accepted", "Accepted"

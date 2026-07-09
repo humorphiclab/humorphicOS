@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { chatApi, membersApi, getStoredUser, User } from "@/lib/api";
+import { chatApi, membersApi, getStoredUser, User, getImageUrl } from "@/lib/api";
 import {
   UserPlus,
   UserCheck,
@@ -18,6 +18,12 @@ import {
   GraduationCap,
   Mail,
   AlertCircle,
+  Phone,
+  Hash,
+  Calendar,
+  UserCircle,
+  Code,
+  Briefcase,
   Sparkles
 } from "lucide-react";
 import Link from "next/link";
@@ -26,7 +32,8 @@ export default function MemberProfilePage() {
   const params = useParams();
   const router = useRouter();
   const qc = useQueryClient();
-  const currentUser = getStoredUser();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  useEffect(() => setCurrentUser(getStoredUser()), []);
   const userId = parseInt(params.id as string);
 
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -93,8 +100,8 @@ export default function MemberProfilePage() {
     if (!friendRequests || !currentUser || !member) return { status: null, isSender: false };
     const req = friendRequests.find(
       (r) =>
-        (r.sender === currentUser.id && r.receiver === member.id) ||
-        (r.receiver === currentUser.id && r.sender === member.id)
+          (r.sender === currentUser.id && r.receiver === member.id) ||
+          (r.receiver === currentUser.id && r.sender === member.id)
     );
     if (!req) return { status: null, isSender: false };
     return {
@@ -166,19 +173,23 @@ export default function MemberProfilePage() {
         </Link>
 
         {/* Profile Card */}
-        <Card className="overflow-hidden border border-card-border/60 bg-gradient-to-b from-card to-muted/15 shadow-xl relative backdrop-blur-md p-0">
+        <Card className="overflow-hidden border border-card-border/60 bg-linear-to-b from-card to-muted/15 shadow-xl relative backdrop-blur-md p-0">
           
           {/* Header Banner */}
-          <div className="h-32 bg-gradient-to-r from-primary/10 via-accent/5 to-transparent border-b border-card-border/40 relative">
+          <div className="h-32 bg-linear-to-r from-primary/10 via-accent/5 to-transparent border-b border-card-border/40 relative">
             <Sparkles className="absolute right-6 bottom-4 h-6 w-6 text-primary/20 animate-pulse" />
           </div>
 
           <div className="px-8 pb-8 relative flex flex-col md:flex-row gap-6 items-start">
             
             {/* Large Avatar */}
-            <div className="h-24 w-24 rounded-full bg-primary/20 text-primary border-4 border-card flex items-center justify-center text-3xl font-bold shadow-md -mt-12 shrink-0 select-none">
-              {member.first_name?.[0]}{member.last_name?.[0]}
-            </div>
+            {member.avatar ? (
+              <img src={getImageUrl(member.avatar) as string} alt="Avatar" className="h-24 w-24 rounded-full border-4 border-card shadow-md -mt-12 shrink-0 object-cover bg-card" />
+            ) : (
+              <div className="h-24 w-24 rounded-full bg-primary/20 text-primary border-4 border-card flex items-center justify-center text-3xl font-bold shadow-md -mt-12 shrink-0 select-none">
+                {member.first_name?.[0]}{member.last_name?.[0]}
+              </div>
+            )}
 
             {/* Profile Info Details */}
             <div className="flex-1 -mt-2">
@@ -206,17 +217,65 @@ export default function MemberProfilePage() {
                     <p className="text-xs mt-1 text-foreground truncate">{member.email}</p>
                   </div>
                 </div>
-
-                {(member.college || member.branch) && (
-                  <div className="flex items-center gap-3 text-muted">
-                    <GraduationCap className="h-4 w-4 text-muted/80 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">Education Details</p>
-                      <p className="text-xs mt-1 text-foreground truncate">
-                        {[member.branch, member.college].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-3 text-muted">
+                  <Phone className="h-4 w-4 text-muted/80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">Contact Number</p>
+                    <p className="text-xs mt-1 text-foreground truncate">{member.phone || <span className="text-muted-foreground/40 italic">Not provided</span>}</p>
                   </div>
+                </div>
+                <div className="flex items-center gap-3 text-muted">
+                  <UserCircle className="h-4 w-4 text-muted/80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">Username</p>
+                    <p className="text-xs mt-1 text-foreground truncate">{member.username ? `@${member.username}` : <span className="text-muted-foreground/40 italic">Not provided</span>}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-muted">
+                  <Hash className="h-4 w-4 text-muted/80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">Enrollment Number</p>
+                    <p className="text-xs mt-1 text-foreground truncate">{member.enrollment_number || <span className="text-muted-foreground/40 italic">Not provided</span>}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-muted">
+                  <GraduationCap className="h-4 w-4 text-muted/80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">Education</p>
+                    <p className="text-xs mt-1 text-foreground truncate">
+                      {[member.branch, member.batch, member.college].filter(Boolean).join(" · ") || <span className="text-muted-foreground/40 italic">Not provided</span>}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-muted">
+                  <Code className="h-4 w-4 text-muted/80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">GitHub</p>
+                    <p className="text-xs mt-1 text-foreground truncate">
+                      {member.github ? (
+                        <a href={member.github.startsWith("http") ? member.github : `https://${member.github}`} target="_blank" rel="noreferrer" className="hover:underline">{member.github}</a>
+                      ) : <span className="text-muted-foreground/40 italic">Not provided</span>}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-muted">
+                  <Briefcase className="h-4 w-4 text-muted/80 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none">LinkedIn</p>
+                    <p className="text-xs mt-1 text-foreground truncate">
+                      {member.linkedin ? (
+                        <a href={member.linkedin.startsWith("http") ? member.linkedin : `https://${member.linkedin}`} target="_blank" rel="noreferrer" className="hover:underline">View Profile</a>
+                      ) : <span className="text-muted-foreground/40 italic">Not provided</span>}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-card-border/40">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground/60 leading-none mb-2">Bio</p>
+                {member.bio ? (
+                  <p className="text-sm text-foreground/80">{member.bio}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground/40 italic">No bio provided</p>
                 )}
               </div>
             </div>
@@ -278,9 +337,9 @@ export default function MemberProfilePage() {
                 <div className="rounded-xl border border-card-border bg-card/60 p-4 text-center min-w-[200px] shadow-sm">
                   <p className="text-[10px] uppercase font-bold text-muted-foreground">My Profile</p>
                   <p className="text-xs font-semibold mt-1">This is your public card</p>
-                  <Link href="/settings">
-                    <Button className="w-full mt-3 bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs h-9">
-                      Edit Profile
+                  <Link href="/settings/profile">
+                    <Button className="w-full mt-3 bg-primary hover:bg-primary/90 text-white font-semibold text-xs h-9">
+                      Edit Profile Settings
                     </Button>
                   </Link>
                 </div>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
+
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "HumorphicOS" },
 };
 
+import { Toaster } from 'sonner';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -33,19 +35,22 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <Script id="theme-script" strategy="beforeInteractive">
-          {`
-            (function() {
-              try {
-                const savedTheme = localStorage.getItem('theme') || 'dark';
-                document.documentElement.setAttribute('data-theme', savedTheme);
-              } catch (e) {}
-            })();
-          `}
-        </Script>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const savedTheme = localStorage.getItem('theme') || 'dark';
+                  document.documentElement.setAttribute('data-theme', savedTheme);
+                } catch (e) {}
+              })();
+            `
+          }}
+        />
       </head>
       <body className="min-h-full">
         <Providers>{children}</Providers>
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );
