@@ -280,9 +280,9 @@ export default function ProjectsPage() {
     },
   });
 
-  const updateProjectMembersMutation = useMutation({
-    mutationFn: ({ slug, members }: { slug: string; members: number[] }) =>
-      projectsApi.update(slug, { members }),
+  const removeProjectMemberMutation = useMutation({
+    mutationFn: ({ slug, userId }: { slug: string; userId: number }) =>
+      projectsApi.removeMember(slug, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
     },
@@ -1072,14 +1072,10 @@ export default function ProjectsPage() {
                                           {selectedTeamIdForMembers === "project" && isSuperuser && (
                                             <button
                                               onClick={() => {
-                                                if (confirm(`Remove ${m.full_name} from the entire project? (They will also be removed from any sub-teams they belong to in this project).`)) {
-                                                  updateProjectMembersMutation.mutate({
-                                                    slug: projectDetail.slug,
-                                                    members: projectDetail.members.filter((id: number) => id !== m.id),
-                                                  });
-                                                  // Optional: If you wanted to remove them from all teams on the frontend concurrently, 
-                                                  // you could trigger updateTeamMembersMutation for each team they are in.
-                                                }
+                                                removeProjectMemberMutation.mutate({
+                                                  slug: projectDetail.slug,
+                                                  userId: m.id,
+                                                });
                                               }}
                                               className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
                                               title="Remove from Project"

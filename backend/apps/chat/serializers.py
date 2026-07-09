@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db import models
 
-from apps.accounts.serializers import UserListSerializer
+from apps.accounts.serializers import UserListSerializer  # type: ignore
 
 from .models import Channel, ChannelMessage, DirectMessage, FriendRequest
 

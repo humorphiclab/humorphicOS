@@ -1,6 +1,6 @@
 import uuid
 
-from rest_framework import serializers, status
+from rest_framework import serializers, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -26,6 +26,8 @@ class AiInsightSerializer(serializers.ModelSerializer):
 
 
 class ChatView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         message = request.data.get("message", "")
         session_id = request.data.get("session_id") or str(uuid.uuid4())
@@ -70,6 +72,8 @@ class ChatView(APIView):
 
 
 class SummarizeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         source_type = request.data.get("type", "task")
         source_id = request.data.get("id")
@@ -114,6 +118,8 @@ class SummarizeView(APIView):
 
 
 class InsightsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
         qs = AiInsight.objects.filter(user=request.user)[:20]
         return Response(AiInsightSerializer(qs, many=True).data)

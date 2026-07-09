@@ -4,7 +4,7 @@ from .models import Permission, Role, User, AuditLog
 
 
 # Roles that can see the full enrollment number (beyond the owner themselves)
-PRIVILEGED_ROLE_SLUGS = {"super_admin", "president", "vice_president", "faculty", "mentor"}
+PRIVILEGED_ROLE_SLUGS = {"founder", "super_admin", "president", "vice_president", "faculty", "mentor"}
 
 
 def mask_enrollment(enrollment: str) -> str:
@@ -158,3 +158,94 @@ class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLog
         fields = ("id", "user", "user_name", "action", "resource", "resource_id", "details", "ip_address", "created_at")
+
+
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), required=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "email", "username", "password", "first_name", "last_name",
+            "phone", "enrollment_number", "college", "branch", "batch",
+            "avatar", "skills", "linkedin", "github", "role",
+        )
+
+    def validate_enrollment_number(self, value: str) -> str:
+        if not value:
+            return value
+        if len(value) != 12:
+            raise serializers.ValidationError(
+                "Enrollment number must be exactly 12 characters long."
+            )
+        branch = value[4:6]
+        if not branch.isalpha():
+            raise serializers.ValidationError(
+                "Characters 5–6 of the enrollment number (branch code) must be alphabetic letters (e.g. IA, CS, ME)."
+            )
+        return value.upper()
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication credentials were not provided.")
+        
+        creator = request.user
+        role_to_assign = attrs.get("role")
+        
+        if not role_to_assign:
+            raise serializers.ValidationError({"role": "Role is required."})
+        
+        if creator.is_superuser:
+            pass  # superuser is allowed to create any role
+        else:
+            creator_role = creator.role
+            if not creator_role:
+                raise serializers.ValidationError("You do not have a role assigned and cannot create users.")
+            
+            creator_slug = creator_role.slug
+            creator_priority = creator_role.priority
+
+            # Low-level roles (priority < 70) cannot create users at all
+            if creator_priority < 70:
+                raise serializers.ValidationError("You do not have permission to create users.")
+
+            # Founder can assign any role
+            if creator_slug == "founder":
+                pass
+            # President can assign founder plus all roles below founder (priority < 110)
+            elif creator_slug == "president":
+                if role_to_assign.slug == "founder" or role_to_assign.priority < 110:
+                    pass
+                else:
+                    raise serializers.ValidationError(
+                        {"role": "A President can only assign a Founder role plus all roles below it."}
+                    )
+            # Other roles (super_admin, vice_president, faculty) can create below roles
+            else:
+                if role_to_assign.slug == "founder":
+                    raise serializers.ValidationError(
+                        {"role": "Only the President can assign the Founder role."}
+                    )
+                if role_to_assign.priority >= creator_priority:
+                    raise serializers.ValidationError(
+                        {"role": f"You can only create users with a role below yours (priority < {creator_priority})."}
+                    )
+
+        # Check unique constraints on super admin, founder, and president roles
+        if role_to_assign and role_to_assign.slug in ["super_admin", "founder", "president"]:
+            existing_user = User.objects.filter(role__slug=role_to_assign.slug, is_active=True).exists()
+            if existing_user:
+                raise serializers.ValidationError(
+                    {"role": f"There can only be one active user with the {role_to_assign.name} role."}
+                )
+                
+        return attrs
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user

@@ -6,7 +6,7 @@ import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { chatApi, membersApi, getStoredUser, User } from "@/lib/api";
+import { chatApi, membersApi, getStoredUser, User, getImageUrl } from "@/lib/api";
 import {
   UserPlus,
   UserCheck,
@@ -164,10 +164,18 @@ export default function MembersPage() {
                   <div className="flex items-start gap-4">
                     {/* Link Avatar and Name for detail view */}
                     <Link href={`/members/${member.id}`} className="shrink-0 group">
-                      <div className="h-12 w-12 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-sm transition-transform group-hover:scale-105 select-none">
-                        {member.first_name?.[0]}
-                        {member.last_name?.[0]}
-                      </div>
+                      {member.avatar ? (
+                        <img 
+                          src={getImageUrl(member.avatar) as string} 
+                          alt="Avatar" 
+                          className="h-12 w-12 rounded-full object-cover border border-primary/20 shadow-sm transition-transform group-hover:scale-105" 
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-sm transition-transform group-hover:scale-105 select-none">
+                          {member.first_name?.[0]}
+                          {member.last_name?.[0]}
+                        </div>
+                      )}
                     </Link>
                     
                     <div className="min-w-0 flex-1">

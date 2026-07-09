@@ -1,5 +1,18 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+export function getImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  
+  // If API_URL is relative (e.g., "/api/v1"), fallback to localhost:8000
+  let baseUrl = API_URL.replace("/api/v1", "");
+  if (!baseUrl) {
+    baseUrl = "http://localhost:8000";
+  }
+  
+  return `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 /** Converts a DRF error response (could be field-level dict, array, or plain string) into a human-readable message. */
 function parseDRFError(error: Record<string, unknown>): string {
   if (typeof error.detail === "string") return error.detail;
@@ -36,7 +49,7 @@ export interface User {
   is_superuser?: boolean;
   phone?: string;
   avatar?: string | null;
-  role?: { id: number; name: string; slug: string; is_leadership: boolean };
+  role?: { id: number; name: string; slug: string; is_leadership: boolean; priority: number };
   college?: string;
   branch?: string;
   batch?: string;
@@ -171,6 +184,12 @@ export const authApi = {
 export const membersApi = {
   list: () => authApi.users(),
   get: (id: number) => apiFetch<User>(`/auth/users/${id}/`),
+  create: (data: Record<string, any>) => apiFetch<User>("/auth/users/", { method: "POST", body: JSON.stringify(data) }),
+  delete: (id: number) => apiFetch<void>(`/auth/users/${id}/`, { method: "DELETE" }),
+};
+
+export const rolesApi = {
+  list: () => apiFetch<any[]>("/auth/roles/"),
 };
 
 // ── Core ──
@@ -203,6 +222,8 @@ export const projectsApi = {
     apiFetch<Project>(`/projects/${slug}/`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (slug: string) =>
     apiFetch<void>(`/projects/${slug}/`, { method: "DELETE" }),
+  removeMember: (slug: string, userId: number) =>
+    apiFetch<void>(`/projects/${slug}/remove_member/`, { method: "POST", body: JSON.stringify({ user_id: userId }) }),
 };
 export const departmentsApi = {
   list: () => list<Department>("/departments/"),

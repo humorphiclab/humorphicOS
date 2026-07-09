@@ -25,6 +25,7 @@ class Role(models.Model):
     """RBAC role with slug-based identification."""
 
     class Slug(models.TextChoices):
+        FOUNDER = "founder", "Founder"
         SUPER_ADMIN = "super_admin", "Super Admin"
         PRESIDENT = "president", "President"
         VICE_PRESIDENT = "vice_president", "Vice President"
@@ -112,6 +113,15 @@ class User(AbstractUser):
     @property
     def full_name(self):
         return self.get_full_name()
+
+    def save(self, *args, **kwargs):
+        if self.role and self.role.slug in ["founder", "super_admin", "president"]:
+            dup_query = User.objects.filter(role=self.role).exclude(pk=self.pk)
+            if dup_query.filter(is_active=True).exists():
+                raise ValidationError(
+                    f"There can only be one active user with the role '{self.role.name}'."
+                )
+        super().save(*args, **kwargs)
 
     def has_permission(self, resource: str, action: str) -> bool:
         if self.is_superuser:

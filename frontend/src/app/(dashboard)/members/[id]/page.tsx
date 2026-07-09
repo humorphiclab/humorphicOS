@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { chatApi, membersApi, getStoredUser, User } from "@/lib/api";
+import { chatApi, membersApi, getStoredUser, User, getImageUrl } from "@/lib/api";
 import {
   UserPlus,
   UserCheck,
@@ -100,8 +100,8 @@ export default function MemberProfilePage() {
     if (!friendRequests || !currentUser || !member) return { status: null, isSender: false };
     const req = friendRequests.find(
       (r) =>
-        (r.sender === currentUser.id && r.receiver === member.id) ||
-        (r.receiver === currentUser.id && r.sender === member.id)
+          (r.sender === currentUser.id && r.receiver === member.id) ||
+          (r.receiver === currentUser.id && r.sender === member.id)
     );
     if (!req) return { status: null, isSender: false };
     return {
@@ -173,10 +173,10 @@ export default function MemberProfilePage() {
         </Link>
 
         {/* Profile Card */}
-        <Card className="overflow-hidden border border-card-border/60 bg-gradient-to-b from-card to-muted/15 shadow-xl relative backdrop-blur-md p-0">
+        <Card className="overflow-hidden border border-card-border/60 bg-linear-to-b from-card to-muted/15 shadow-xl relative backdrop-blur-md p-0">
           
           {/* Header Banner */}
-          <div className="h-32 bg-gradient-to-r from-primary/10 via-accent/5 to-transparent border-b border-card-border/40 relative">
+          <div className="h-32 bg-linear-to-r from-primary/10 via-accent/5 to-transparent border-b border-card-border/40 relative">
             <Sparkles className="absolute right-6 bottom-4 h-6 w-6 text-primary/20 animate-pulse" />
           </div>
 
@@ -184,7 +184,7 @@ export default function MemberProfilePage() {
             
             {/* Large Avatar */}
             {member.avatar ? (
-              <img src={member.avatar} alt="Avatar" className="h-24 w-24 rounded-full border-4 border-card shadow-md -mt-12 shrink-0 object-cover bg-card" />
+              <img src={getImageUrl(member.avatar) as string} alt="Avatar" className="h-24 w-24 rounded-full border-4 border-card shadow-md -mt-12 shrink-0 object-cover bg-card" />
             ) : (
               <div className="h-24 w-24 rounded-full bg-primary/20 text-primary border-4 border-card flex items-center justify-center text-3xl font-bold shadow-md -mt-12 shrink-0 select-none">
                 {member.first_name?.[0]}{member.last_name?.[0]}
