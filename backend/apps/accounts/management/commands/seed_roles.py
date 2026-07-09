@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 
+# pyrefly: ignore [missing-import]
 from apps.accounts.models import Permission, Role
 
 

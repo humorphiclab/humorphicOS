@@ -33,16 +33,19 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <Script id="theme-script" strategy="beforeInteractive">
-          {`
-            (function() {
-              try {
-                const savedTheme = localStorage.getItem('theme') || 'dark';
-                document.documentElement.setAttribute('data-theme', savedTheme);
-              } catch (e) {}
-            })();
-          `}
-        </Script>
+        <script
+          id="theme-script"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const savedTheme = localStorage.getItem('theme') || 'dark';
+                  document.documentElement.setAttribute('data-theme', savedTheme);
+                } catch (e) {}
+              })();
+            `
+          }}
+        />
       </head>
       <body className="min-h-full">
         <Providers>{children}</Providers>

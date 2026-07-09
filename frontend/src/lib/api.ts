@@ -264,6 +264,12 @@ export const notificationsApi = {
   list: () => list<Notification>("/notifications/"),
   unreadCount: () => apiFetch<{ count: number }>("/notifications/unread_count/"),
   readAll: () => apiFetch<{ marked_read: number }>("/notifications/read_all/", { method: "POST" }),
+  getPreferences: () => apiFetch<NotificationPreference>("/notifications/preferences/"),
+  updatePreferences: (data: Partial<NotificationPreference>) =>
+    apiFetch<NotificationPreference>("/notifications/preferences/", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const reportsApi = {
@@ -473,10 +479,24 @@ export interface DailyUpdate {
   challenges: string; learning: string; tomorrow_plan: string; need_help: string;
 }
 export interface Meeting {
-  id: number; title: string; start_time: string; end_time: string; meet_link: string; agenda: string;
+  id: number; title: string; start_time: string; end_time: string; meet_link: string; agenda?: string; description?: string; organizer_detail?: User; participants?: number[];
 }
 export interface Announcement { id: number; title: string; content: string; priority: string; is_pinned: boolean; created_at: string; }
-export interface Notification { id: number; title: string; message: string; notification_type: string; is_read: boolean; link: string; created_at: string; }
+export interface Notification { id: number; title: string; message: string; notification_type: string; priority: string; is_read: boolean; link: string; created_at: string; }
+export interface NotificationPreference {
+  email_task_assigned: boolean;
+  in_app_task_assigned: boolean;
+  email_task_review: boolean;
+  in_app_task_review: boolean;
+  email_task_completed: boolean;
+  in_app_task_completed: boolean;
+  email_task_needs_changes: boolean;
+  in_app_task_needs_changes: boolean;
+  email_messages: boolean;
+  in_app_messages: boolean;
+  email_meetings: boolean;
+  in_app_meetings: boolean;
+}
 export interface Report { id: number; title: string; report_type: string; data: Record<string, unknown>; created_at: string; }
 export interface AttendanceRecord { id: number; date: string; status: string; method: string; check_in: string | null; notes?: string; }
 export interface Holiday { id: number; name: string; date: string; description?: string; }

@@ -16,8 +16,14 @@ const healthColors: Record<string, string> = {
 
 export default function MySpacePage() {
   const qc = useQueryClient();
-  const currentUser = getStoredUser();
+  const [currentUser, setCurrentUser] = React.useState<any | null>(null);
+
+  React.useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, []);
+
   const isSuperuser = currentUser?.is_superuser;
+
 
   const [selectedDept, setSelectedDept] = useState<any | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<any | null>(null);
