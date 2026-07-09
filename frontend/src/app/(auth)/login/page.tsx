@@ -167,7 +167,7 @@ export default function LoginPage() {
                 variant="outline"
                 className="w-full h-11"
                 onClick={() =>
-                  alert("Please configure NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google Sign-In.")
+                  alert("Pleasee configure NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google Sign-In.")
                 }
               >
                 Google
