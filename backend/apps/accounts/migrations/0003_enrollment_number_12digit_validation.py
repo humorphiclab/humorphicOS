@@ -4,6 +4,14 @@ import apps.accounts.models
 from django.db import migrations, models
 
 
+def truncate_enrollment_numbers(apps, schema_editor):
+    User = apps.get_model("accounts", "User")
+    for user in User.objects.all():
+        if user.enrollment_number and len(user.enrollment_number) > 12:
+            user.enrollment_number = user.enrollment_number[:12]
+            user.save(update_fields=["enrollment_number"])
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,6 +19,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(truncate_enrollment_numbers),
         migrations.AlterField(
             model_name="user",
             name="enrollment_number",
