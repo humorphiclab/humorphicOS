@@ -1,6 +1,6 @@
 from celery import shared_task
-from django.core.mail import send_mail
 from django.conf import settings
+from apps.notifications.services import send_html_email_to_user
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -26,12 +26,12 @@ def send_daily_reminder():
             link="/daily-updates",
         )
         if member.email:
-            send_mail(
-                subject="HumorphicOS: Daily Update Reminder",
-                message=f"Hi {member.first_name},\n\nPlease submit your daily work update for {today}.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[member.email],
-                fail_silently=False,
+            send_html_email_to_user(
+                user=member,
+                title="Daily Update Reminder",
+                message=f"Hi {member.first_name},\n\nPlease submit your daily work update for today.",
+                link="/daily-updates",
+                priority="normal"
             )
         if member.phone and getattr(settings, "WHATSAPP_API_URL", ""):
             send_whatsapp_reminder.delay(member.id, f"Hi {member.first_name}, please submit your daily work update for {today}.")

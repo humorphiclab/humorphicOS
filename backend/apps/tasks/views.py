@@ -26,6 +26,33 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
     search_fields = ("title", "description")
     filterset_fields = ("status", "priority", "project", "assignee")
 
+    def create(self, request, *args, **kwargs):
+        assign_to_all = request.data.get("assignee") == "all"
+        if assign_to_all:
+            user = request.user
+            is_lead = user.is_superuser or getattr(user.role, "is_leadership", False) or getattr(user.role, "slug", "") in ["team_lead", "department_head"]
+            if not is_lead:
+                return Response({"detail": "You do not have permission to assign tasks to all members."}, status=403)
+
+            from apps.accounts.models import User
+            users = User.objects.filter(is_active=True)
+            created_tasks = []
+            
+            data = request.data.copy()
+            for u in users:
+                data["assignee"] = u.id
+                serializer = self.get_serializer(data=data)
+                serializer.is_valid(raise_exception=True)
+                task = serializer.save()
+                created_tasks.append(task)
+                
+            return Response(
+                {"detail": f"Successfully created tasks for {len(created_tasks)} members."},
+                status=201
+            )
+            
+        return super().create(request, *args, **kwargs)
+
     @action(detail=True, methods=["post"])
     def comments(self, request, pk=None):
         task = self.get_object()

@@ -315,6 +315,18 @@ export const notificationsApi = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  broadcast: (data: {
+    title: string;
+    message: string;
+    target_type: "all" | "department" | "team" | "user";
+    target_id?: number | null;
+    priority?: string;
+    notification_type?: string;
+    link?: string;
+  }) => apiFetch<{ detail: string }>("/notifications/broadcast/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
 };
 
 export const reportsApi = {
@@ -348,7 +360,7 @@ export const reportsApi = {
 // ── Phase 2 ──
 export const attendanceApi = {
   mark: () => apiFetch<AttendanceRecord>("/attendance/records/mark/", { method: "POST" }),
-  records: () => list<AttendanceRecord>("/attendance/records/"),
+  records: (date?: string) => list<AttendanceRecord>(`/attendance/records/${date ? `?date=${date}` : ""}`),
   analytics: () => apiFetch<{ total: number; by_status: { status: string; count: number }[] }>("/attendance/records/analytics/"),
   holidays: () => list<Holiday>("/attendance/holidays/"),
   leaves: () => list<LeaveRequest>("/attendance/leaves/"),
@@ -543,7 +555,7 @@ export interface NotificationPreference {
   in_app_meetings: boolean;
 }
 export interface Report { id: number; title: string; report_type: string; data: Record<string, unknown>; created_at: string; }
-export interface AttendanceRecord { id: number; date: string; status: string; method: string; check_in: string | null; notes?: string; }
+export interface AttendanceRecord { id: number; date: string; status: string; method: string; check_in: string | null; notes?: string; user_detail?: User; }
 export interface Holiday { id: number; name: string; date: string; description?: string; }
 export interface LeaveRequest { id: number; leave_type: string; start_date: string; end_date: string; reason: string; status: string; user_detail?: User; }
 export interface Component { id: number; name: string; sku: string; category: string; quantity: number; min_stock: number; location: string; is_low_stock?: boolean; }

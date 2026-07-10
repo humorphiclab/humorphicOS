@@ -6,7 +6,7 @@ import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { attendanceApi, apiFetch, getStoredUser } from "@/lib/api";
+import { attendanceApi, apiFetch, getStoredUser, getImageUrl } from "@/lib/api";
 import { CheckCircle, QrCode, Calendar, Clock, AlertCircle, Sparkles, Check, X, Camera, UserCheck } from "lucide-react";
 
 export default function AttendancePage() {
@@ -30,7 +30,11 @@ export default function AttendancePage() {
   const [leaveError, setLeaveError] = useState("");
   const [leaveSuccess, setLeaveSuccess] = useState("");
 
-  const { data: records, isLoading } = useQuery({ queryKey: ["attendance"], queryFn: attendanceApi.records });
+  const [selectedDate, setSelectedDate] = useState("");
+  const { data: records, isLoading } = useQuery({
+    queryKey: ["attendance", selectedDate],
+    queryFn: () => attendanceApi.records(selectedDate),
+  });
   const { data: analytics } = useQuery({ queryKey: ["attendance-analytics"], queryFn: attendanceApi.analytics });
   const { data: leaves } = useQuery({ queryKey: ["leaves"], queryFn: attendanceApi.leaves });
   const { data: holidays } = useQuery({ queryKey: ["holidays"], queryFn: attendanceApi.holidays });
@@ -229,7 +233,29 @@ export default function AttendancePage() {
 
             {/* Attendance History */}
             <Card>
-              <h3 className="font-semibold mb-4">Recent Attendance Records</h3>
+              <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
+                <h3 className="font-semibold">Recent Attendance Records</h3>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="filter-date" className="text-xs text-muted whitespace-nowrap">Filter Date:</Label>
+                  <Input
+                    id="filter-date"
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="h-8 w-40 text-xs py-1"
+                  />
+                  {selectedDate && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDate("")}
+                      className="h-8 px-2 text-xs"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </div>
               {isLoading ? (
                 <p className="text-muted text-sm">Loading...</p>
               ) : !records?.length ? (
@@ -239,14 +265,31 @@ export default function AttendancePage() {
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-card-border text-muted">
+                        {isLead && <th className="pb-2 font-medium">Member</th>}
                         <th className="pb-2 font-medium">Date</th>
                         <th className="pb-2 font-medium">Status</th>
                         <th className="pb-2 font-medium">Method</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-card-border">
-                      {records.slice(0, 10).map((r) => (
+                      {(selectedDate ? records : records.slice(0, 10)).map((r) => (
                         <tr key={r.id} className="hover:bg-muted/5">
+                          {isLead && (
+                            <td className="py-2.5 font-medium flex items-center gap-2">
+                              {r.user_detail?.avatar ? (
+                                <img
+                                  src={getImageUrl(r.user_detail.avatar) || ""}
+                                  alt=""
+                                  className="h-6 w-6 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                                  {r.user_detail?.first_name?.[0] ?? r.user_detail?.username?.[0] ?? "?"}
+                                </div>
+                              )}
+                              <span>{r.user_detail?.full_name || r.user_detail?.username || "Unknown"}</span>
+                            </td>
+                          )}
                           <td className="py-2.5">{r.date}</td>
                           <td className="py-2.5 capitalize font-medium text-primary">{r.status}</td>
                           <td className="py-2.5 capitalize text-muted">{r.method}</td>

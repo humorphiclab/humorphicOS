@@ -144,7 +144,7 @@ export default function TasksPage() {
                   priority: form.priority,
                   ...(form.due_date ? { due_date: form.due_date } : {}),
                   status: "todo",
-                  ...(isLead && assignType === "member" && form.assignee ? { assignee: Number(form.assignee) } : !isLead && user?.id ? { assignee: user.id } : {}),
+                  ...(isLead && assignType === "member" && form.assignee ? { assignee: form.assignee === "all" ? "all" : Number(form.assignee) } : !isLead && user?.id ? { assignee: user.id } : {}),
                   ...(isLead && assignType === "project" && projectTargetType === "team" && form.assigned_team ? { assigned_team: Number(form.assigned_team) } : {}),
                   ...(isLead && assignType === "project" && projectTargetType === "member" && form.assignee ? { assignee: Number(form.assignee) } : {}),
                   ...(isLead && assignType === "department" && form.assigned_department ? { assigned_department: Number(form.assigned_department) } : {}),
@@ -195,6 +195,7 @@ export default function TasksPage() {
                           onChange={(e) => setForm({ ...form, assignee: e.target.value })}
                         >
                           <option value="">Unassigned</option>
+                          <option value="all">All Members</option>
                           {(members ?? []).map((m) => (
                             <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
                           ))}
