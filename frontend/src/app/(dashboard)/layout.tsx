@@ -149,7 +149,7 @@ export default function DashboardLayout({
                 Later
               </Button>
               <Button 
-                variant="default" 
+                variant="primary" 
                 size="sm" 
                 onClick={() => readAll.mutate()}
                 disabled={readAll.isPending}

@@ -229,7 +229,7 @@ export default function NotificationsPage() {
           </div>
           {isLead && (
             <Button
-              variant="default"
+              variant="primary"
               size="sm"
               onClick={() => setShowBroadcastModal(true)}
               className="text-xs font-semibold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-sm shrink-0"
@@ -619,7 +619,7 @@ export default function NotificationsPage() {
                 </Button>
                 <Button 
                   type="submit"
-                  variant="default" 
+                  variant="primary" 
                   size="sm" 
                   disabled={broadcastMutation.isPending}
                   className="text-xs h-8 px-4 font-semibold"
