@@ -25,8 +25,8 @@ export default function TasksPage() {
   const user = getStoredUser();
   const isLead = user?.is_superuser || user?.role?.is_leadership || user?.role?.slug === "team_lead" || user?.role?.slug === "department_head" || false;
 
-  const [tab, setTab] = useState<"list" | "kanban" | "create">("list");
-  const tabs: ("list" | "kanban" | "create")[] = ["list", "kanban", "create"];
+  const [tab, setTab] = useState<"tasks" | "create">("tasks");
+  const tabs: ("tasks" | "create")[] = ["tasks", "create"];
 
   const [assignType, setAssignType] = useState<"member" | "project" | "department">("member");
   const [assigneeType, setAssigneeType] = useState<"single" | "multiple" | "all">("single");
@@ -58,7 +58,7 @@ export default function TasksPage() {
 
   // Queries
   const { data: tasks, isLoading } = useQuery({ queryKey: ["my-tasks"], queryFn: tasksApi.myTasks });
-  const { data: kanban } = useQuery({ queryKey: ["kanban"], queryFn: () => tasksApi.kanban(), enabled: tab === "kanban" });
+  const { data: kanban } = useQuery({ queryKey: ["kanban"], queryFn: () => tasksApi.kanban(), enabled: tab === "tasks" });
 
   const { data: members } = useQuery({
     queryKey: ["members"],
@@ -97,7 +97,7 @@ export default function TasksPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["my-tasks"] });
       qc.invalidateQueries({ queryKey: ["kanban"] });
-      setTab("list");
+      setTab("tasks");
       setForm({
         title: "", description: "", priority: "medium", due_date: "",
         assignee: "", assigned_team: "", assigned_department: "",
@@ -537,79 +537,71 @@ export default function TasksPage() {
           </Card>
         )}
 
-        {/* Tab: Kanban Board */}
-        {tab === "kanban" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 overflow-x-auto">
+        {/* Tab: Tasks (Detailed Kanban Board) */}
+        {tab === "tasks" && (
+          <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-220px)] snap-x">
             {STATUSES.map((status) => (
-              <div key={status} className="min-w-[200px]">
-                <p className="text-xs font-semibold uppercase text-muted mb-2">{status.replace("_", " ")}</p>
-                <div className="space-y-2">
+              <div key={status} className="w-[320px] shrink-0 flex flex-col bg-card/20 rounded-2xl p-3 border border-card-border/50 snap-start">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                    <span className={cn("w-2.5 h-2.5 rounded-full", statusColors[status]?.split(' ')[0] || "bg-muted")} />
+                    {status.replace("_", " ")}
+                  </h3>
+                  <span className="text-xs bg-muted/20 px-2 py-0.5 rounded-full font-mono text-muted-foreground">{(kanban?.[status] ?? []).length}</span>
+                </div>
+                
+                <div className="space-y-3 overflow-y-auto flex-1 pr-1 custom-scrollbar">
                   {(kanban?.[status] ?? []).map((task: any) => (
-                    <Card key={task.id} className="p-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedTask(task)}>
-                      <p className="text-sm font-medium">{task.title}</p>
-                      {task.project_detail && <p className="text-[10px] text-primary mt-1">{task.project_detail.title}</p>}
-                      {canUserModifyTask(task) && status !== "done" && (
-                        <select
-                          className="mt-2 w-full text-xs rounded border border-card-border bg-card px-1 py-0.5"
-                          value={status}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => updateStatus.mutate({ id: task.id, status: e.target.value })}
-                        >
-                          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                    <Card 
+                      key={task.id} 
+                      className="p-4 cursor-pointer hover:border-primary/50 transition-all shadow-sm group hover:-translate-y-0.5" 
+                      onClick={() => setSelectedTask(task)}
+                    >
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <h4 className="font-bold text-sm leading-tight text-white group-hover:text-primary transition-colors">{task.title}</h4>
+                      </div>
+                      
+                      {task.description && <p className="text-xs text-muted mb-3 line-clamp-2">{task.description}</p>}
+                      
+                      {task.project_detail && (
+                        <div className="mb-3 flex items-center">
+                          <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 line-clamp-1 flex items-center gap-1">
+                            <Layers3 size={10} /> {task.project_detail.title}
+                          </span>
+                        </div>
                       )}
+                      
+                      <div className="flex flex-wrap gap-2 items-center justify-between mt-auto pt-3 border-t border-card-border/50">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded uppercase font-bold",
+                            task.priority === 'urgent' ? 'bg-red-500/20 text-red-500' :
+                            task.priority === 'high' ? 'bg-orange-500/20 text-orange-500' :
+                            task.priority === 'medium' ? 'bg-blue-500/20 text-blue-500' :
+                            'bg-muted/20 text-muted'
+                          )}>
+                            {task.priority}
+                          </span>
+                          {task.attachments && task.attachments.length > 0 && (
+                            <span className="text-[10px] text-muted flex items-center gap-1 font-medium bg-muted/10 px-1.5 py-0.5 rounded">
+                              <Paperclip size={10} /> {task.attachments.length}
+                            </span>
+                          )}
+                        </div>
+                        {task.due_date && <span className="text-[10px] text-muted font-mono bg-muted/10 px-1.5 py-0.5 rounded">{task.due_date}</span>}
+                      </div>
                     </Card>
                   ))}
+                  
+                  {(!kanban?.[status] || kanban[status].length === 0) && (
+                    <div className="border-2 border-dashed border-card-border/50 rounded-xl p-6 text-center h-full flex flex-col items-center justify-center min-h-[120px]">
+                      <p className="text-xs text-muted font-medium">No tasks</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
-        )}
-
-        {/* Tab: Task List */}
-        {tab === "list" && (
-          isLoading ? (
-            <p className="text-muted text-sm">Loading tasks...</p>
-          ) : !tasks?.length ? (
-            <Card><p className="text-muted text-center py-8">No tasks assigned yet.</p></Card>
-          ) : (
-            <div className="space-y-3">
-              {tasks.map((task: any) => (
-                <Card key={task.id} className="flex items-start justify-between gap-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedTask(task)}>
-                  <div>
-                    <h3 className="font-medium">{task.title}</h3>
-                    {task.description && <p className="text-sm text-muted mt-1 line-clamp-2">{task.description}</p>}
-                    <div className="flex gap-2 items-center mt-2">
-                      {task.project_detail && <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded">{task.project_detail.title}</span>}
-                      {task.attachments && task.attachments.length > 0 && (
-                        <span className="text-xs text-muted flex items-center gap-1">
-                          <Paperclip size={12} /> {task.attachments.length}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    {canUserModifyTask(task) && task.status !== "done" ? (
-                      <select
-                        className={cn("text-xs px-2 py-0.5 rounded-full capitalize border-none outline-none appearance-none cursor-pointer font-medium", statusColors[task.status] || statusColors.todo)}
-                        value={task.status}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => updateStatus.mutate({ id: task.id, status: e.target.value })}
-                      >
-                        {STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-                      </select>
-                    ) : (
-                      <span className={cn("text-xs px-2 py-0.5 rounded-full capitalize font-medium", statusColors[task.status] || statusColors.todo)}>
-                        {task.status.replace("_", " ")}
-                      </span>
-                    )}
-                    <span className="text-xs capitalize font-medium">{task.priority}</span>
-                    {task.due_date && <span className="text-xs text-muted font-mono">{task.due_date}</span>}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )
         )}
       </div>
 
