@@ -36,15 +36,15 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full">
-        {/* Theme init runs before hydration – must use next/script, not a bare <script> tag */}
-        <Script id="theme-init" strategy="beforeInteractive">{`
+        {/* Theme init runs before hydration */}
+        <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
               var t = localStorage.getItem('theme') || 'dark';
               document.documentElement.setAttribute('data-theme', t);
             } catch (e) {}
           })();
-        `}</Script>
+        `}} />
         <Providers>{children}</Providers>
         <Toaster position="top-right" richColors />
       </body>

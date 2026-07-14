@@ -18,6 +18,7 @@ export default function DepartmentsPage() {
 
   const [selectedDept, setSelectedDept] = useState<any | null>(null);
   const [editing, setEditing] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "", head: "", color: "" });
   const [memberToAdd, setMemberToAdd] = useState("");
 
@@ -53,13 +54,27 @@ export default function DepartmentsPage() {
     },
   });
 
+  const createMutation = useMutation({
+    mutationFn: (data: any) => departmentsApi.create(data),
+    onSuccess: (newDept) => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      setIsCreating(false);
+      openDept(newDept);
+    },
+  });
+
   const handleSave = () => {
-    updateMutation.mutate({
+    const payload = {
       name: editForm.name,
       description: editForm.description,
       head: editForm.head ? Number(editForm.head) : null,
       color: editForm.color,
-    });
+    };
+    if (isCreating) {
+      createMutation.mutate(payload);
+    } else {
+      updateMutation.mutate(payload);
+    }
   };
 
   const addMemberMutation = useMutation({
@@ -93,7 +108,15 @@ export default function DepartmentsPage() {
       <div className="p-6 flex gap-6 h-[calc(100vh-112px)] overflow-hidden">
 
         {/* Left: Department Cards */}
-        <div className={cn("flex flex-col gap-4 overflow-y-auto pr-1", selectedDept ? "w-5/12 xl:w-4/12" : "w-full max-w-6xl")}>
+        <div className={cn("flex flex-col gap-4 overflow-y-auto pr-1", selectedDept || isCreating ? "w-5/12 xl:w-4/12" : "w-full max-w-6xl")}>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold text-white">Departments</h1>
+            {canManage && (
+              <Button onClick={() => { setSelectedDept(null); setEditing(true); setIsCreating(true); setEditForm({ name: "", description: "", head: "", color: "#6366f1" }); }} className="bg-primary text-black font-bold h-8 text-xs">
+                + Create Department
+              </Button>
+            )}
+          </div>
           {isLoading ? (
             <div className="flex items-center gap-2 text-muted text-sm py-8 justify-center">
               <Loader2 className="animate-spin h-4 w-4" /> Loading departments...
@@ -108,20 +131,34 @@ export default function DepartmentsPage() {
               )}
               style={{ borderTop: `3px solid ${d.color || "#6366f1"}` }}
             >
-              <div className="flex items-center gap-4">
-                <div
-                  className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
-                  style={{ background: d.color || "#6366f1" }}
-                >
-                  {d.name[0]}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
+                    style={{ background: d.color || "#6366f1" }}
+                  >
+                    {d.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-sm">{d.name}</p>
+                    <p className="text-xs text-muted mt-0.5 line-clamp-1">{d.description || "No description"}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-white text-sm">{d.name}</p>
-                  <p className="text-xs text-muted mt-0.5 line-clamp-1">{d.description || "No description"}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-muted">{d.member_count ?? 0}</p>
-                  <p className="text-[10px] text-muted">members</p>
+                <div className="flex flex-col items-end shrink-0 gap-2">
+                  <div className="text-right">
+                    <p className="text-xs text-muted font-bold">{d.member_count ?? 0}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-muted">members</p>
+                  </div>
+                  {canManage && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 px-2 text-[10px] text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); openDept(d); setEditing(true); }}
+                    >
+                      <Pencil size={10} className="mr-1" /> Edit
+                    </Button>
+                  )}
                 </div>
               </div>
               {d.head_detail && (
@@ -136,30 +173,28 @@ export default function DepartmentsPage() {
         </div>
 
         {/* Right: Detail / Edit Panel */}
-        {selectedDept && (
+        {(selectedDept || isCreating) && (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <Card className="flex-1 flex flex-col overflow-hidden border-card-border shadow-2xl">
-              {/* Panel Header */}
-              <div className="p-5 border-b border-card-border flex justify-between items-center shrink-0 bg-[#0d0d0f]">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-black"
-                    style={{ background: selectedDept.color || "#6366f1" }}
-                  >
-                    {selectedDept.name[0]}
+            <div className="border border-card-border bg-card/50 rounded-2xl h-full flex flex-col overflow-hidden shadow-2xl relative">
+              
+              {/* Header */}
+              <div className="flex justify-between items-center bg-card/80 p-4 border-b border-card-border">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 flex items-center justify-center rounded-xl font-black text-white text-lg shadow-lg" style={{ background: (isCreating ? editForm.color : selectedDept?.color) || "#6366f1" }}>
+                    {(isCreating ? editForm.name[0] : selectedDept?.name?.[0]) || "D"}
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-white">{selectedDept.name}</h2>
+                    <h2 className="text-base font-black text-white">{isCreating ? "New Department" : selectedDept?.name}</h2>
                     <p className="text-xs text-muted">Department</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {canManage && !editing && (
-                    <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="h-8 text-xs gap-1.5">
-                      <Pencil size={12} /> Edit
+                  {canManage && !editing && !isCreating && (
+                    <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="h-8 text-xs gap-1.5 border-primary/20 text-primary hover:bg-primary/10">
+                      <Pencil size={12} /> Edit Dept
                     </Button>
                   )}
-                  <button onClick={() => setSelectedDept(null)} className="p-1.5 rounded-lg hover:bg-muted/20 text-muted hover:text-white transition-colors">
+                  <button onClick={() => { setSelectedDept(null); setIsCreating(false); setEditing(false); }} className="p-1.5 rounded-lg hover:bg-muted/20 text-muted hover:text-white transition-colors">
                     <X size={16} />
                   </button>
                 </div>
@@ -216,21 +251,21 @@ export default function DepartmentsPage() {
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <Button onClick={handleSave} disabled={updateMutation.isPending} className="text-white flex items-center gap-1.5">
-                        {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                        {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                      <Button onClick={handleSave} disabled={updateMutation.isPending || createMutation.isPending} className="text-black bg-primary font-bold flex items-center gap-1.5">
+                        {updateMutation.isPending || createMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                        {updateMutation.isPending || createMutation.isPending ? "Saving..." : "Save Changes"}
                       </Button>
-                      <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+                      <Button variant="outline" onClick={() => { setEditing(false); setIsCreating(false); if(isCreating) setSelectedDept(null); }}>Cancel</Button>
                     </div>
                   </div>
                 ) : (
                   /* ── Read-Only View ── */
                   <>
-                    <div className="h-1 w-full rounded-full" style={{ background: selectedDept.color || "#6366f1" }} />
-                    <p className="text-sm text-muted leading-relaxed">{selectedDept.description || "No description provided."}</p>
+                    <div className="h-1 w-full rounded-full" style={{ background: selectedDept?.color || "#6366f1" }} />
+                    <p className="text-sm text-muted leading-relaxed">{selectedDept?.description || "No description provided."}</p>
 
-                    {selectedDept.head_detail && (
-                      <div className="bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 flex items-center gap-3">
+                    {selectedDept?.head_detail && (
+                      <div className="bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 flex items-center gap-3 mt-4">
                         <div className="h-10 w-10 rounded-full bg-amber-400/20 flex items-center justify-center text-amber-400 font-black">
                           {selectedDept.head_detail.full_name?.[0]}
                         </div>
@@ -243,8 +278,9 @@ export default function DepartmentsPage() {
                   </>
                 )}
 
-                {/* Members Section — always shown */}
-                <div className="space-y-3">
+                {/* Members Section — always shown (except when creating) */}
+                {!isCreating && selectedDept && (
+                <div className="space-y-3 mt-8">
                   <div className="flex items-center justify-between border-b border-card-border pb-2">
                     <div className="flex items-center gap-2">
                       <Users size={15} className="text-primary" />
@@ -280,7 +316,10 @@ export default function DepartmentsPage() {
 
                   <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
                     {(selectedDept.members_detail ?? []).length === 0 ? (
-                      <p className="text-xs text-muted italic">No members yet.</p>
+                      <div className="text-center py-6">
+                        <Users size={32} className="mx-auto text-muted mb-2 opacity-50" />
+                        <p className="text-sm text-muted">No members in this department yet.</p>
+                      </div>
                     ) : (
                       (selectedDept.members_detail ?? []).map((m: any) => (
                         <div key={m.id} className="flex items-center justify-between p-2.5 rounded-lg border border-card-border hover:bg-muted/10 transition-colors">
@@ -308,8 +347,9 @@ export default function DepartmentsPage() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
-            </Card>
+            </div>
           </div>
         )}
       </div>

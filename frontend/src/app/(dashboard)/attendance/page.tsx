@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
@@ -12,9 +12,14 @@ import { cn } from "@/lib/utils";
 
 export default function AttendancePage() {
   const qc = useQueryClient();
+  const [mounted, setMounted] = useState(false);
   const user = getStoredUser();
   const isLead = user?.role?.is_leadership;
   const isAuthority = user?.is_superuser || user?.role?.is_leadership || (user?.role?.priority && user.role.priority >= 70);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [faceMsg, setFaceMsg] = useState("");
   const [faceErr, setFaceErr] = useState("");
@@ -204,6 +209,8 @@ export default function AttendancePage() {
     };
   });
 
+  if (!mounted) return null;
+
   return (
     <>
       <TopBar title="Attendance & Leaves" />
@@ -348,7 +355,7 @@ export default function AttendancePage() {
                     </div>
                   )}
                 </div>
-                
+
                 {/* Month navigation */}
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={handlePrevMonth} className="h-8 w-8 p-0">
@@ -632,7 +639,7 @@ export default function AttendancePage() {
                           const dd = String(d).padStart(2, "0");
                           const dateStr = `${currentYear}-${mm}-${dd}`;
                           const record = allRecords?.find((r) => r.user_detail?.id === member.id && r.date === dateStr);
-                          
+
                           let dotColor = "bg-muted-foreground/20";
                           let titleStr = "No Record";
                           if (record) {
