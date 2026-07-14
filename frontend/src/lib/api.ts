@@ -2,15 +2,23 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1
 
 export function getImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  if (url.startsWith("http")) return url;
   
-  // If API_URL is relative (e.g., "/api/v1"), fallback to localhost:8000
-  let baseUrl = API_URL.replace("/api/v1", "");
-  if (!baseUrl) {
-    baseUrl = "http://localhost:8000";
+  let finalUrl = url;
+  if (!url.startsWith("http")) {
+    // If API_URL is relative (e.g., "/api/v1"), fallback to localhost:8000
+    let baseUrl = API_URL.replace("/api/v1", "");
+    if (!baseUrl) {
+      baseUrl = "http://localhost:8000";
+    }
+    finalUrl = `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
   }
   
-  return `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+  // If we are on HTTPS, ensure the media URLs also use HTTPS
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    finalUrl = finalUrl.replace(/^http:\/\//i, "https://");
+  }
+  
+  return finalUrl;
 }
 
 /** Converts a DRF error response (could be field-level dict, array, or plain string) into a human-readable message. */
@@ -136,6 +144,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       res = await fetch(`${API_URL}${path}`, { ...options, headers });
     }
   }
+  if (res.status === 401) {
+    setStoredTokens(null);
+    setStoredUser(null);
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+  }
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(parseDRFError(error));
@@ -224,9 +239,17 @@ export const projectsApi = {
     apiFetch<void>(`/projects/${slug}/`, { method: "DELETE" }),
   removeMember: (slug: string, userId: number) =>
     apiFetch<void>(`/projects/${slug}/remove_member/`, { method: "POST", body: JSON.stringify({ user_id: userId }) }),
+  listJoinRequests: () => list<any>("/projects/join-requests/"),
+  createJoinRequest: (projectId: number, teamId?: number) =>
+    apiFetch<any>("/projects/join-requests/", { method: "POST", body: JSON.stringify({ project: projectId, team: teamId }) }),
+  approveJoinRequest: (requestId: number) =>
+    apiFetch<any>(`/projects/join-requests/${requestId}/approve/`, { method: "POST" }),
+  rejectJoinRequest: (requestId: number) =>
+    apiFetch<any>(`/projects/join-requests/${requestId}/reject/`, { method: "POST" }),
 };
 export const departmentsApi = {
   list: () => list<Department>("/departments/"),
+  get: (slug: string) => apiFetch<any>(`/departments/${slug}/`),
   create: (data: Partial<Department>) =>
     apiFetch<Department>("/departments/", { method: "POST", body: JSON.stringify(data) }),
   update: (slug: string, data: Partial<Department>) =>
@@ -237,6 +260,11 @@ export const departmentsApi = {
     apiFetch<{ status: string }>(`/departments/${slug}/join/`, { method: "POST" }),
   leave: (slug: string) =>
     apiFetch<{ status: string }>(`/departments/${slug}/leave/`, { method: "POST" }),
+  listJoinRequests: () => list<any>("/departments/join-requests/"),
+  approveJoinRequest: (requestId: number) =>
+    apiFetch<any>(`/departments/join-requests/${requestId}/approve/`, { method: "POST" }),
+  rejectJoinRequest: (requestId: number) =>
+    apiFetch<any>(`/departments/join-requests/${requestId}/reject/`, { method: "POST" }),
 };
 export const teamsApi = {
   list: () => list<Team>("/teams/"),
@@ -360,7 +388,18 @@ export const reportsApi = {
 // ── Phase 2 ──
 export const attendanceApi = {
   mark: () => apiFetch<AttendanceRecord>("/attendance/records/mark/", { method: "POST" }),
-  records: (date?: string) => list<AttendanceRecord>(`/attendance/records/${date ? `?date=${date}` : ""}`),
+  records: (params?: string | { date?: string; user?: number; no_pagination?: boolean }) => {
+    const q = new URLSearchParams();
+    if (typeof params === "string") {
+      if (params) q.set("date", params);
+    } else if (params) {
+      if (params.date) q.set("date", params.date);
+      if (params.user) q.set("user", String(params.user));
+      if (params.no_pagination) q.set("no_pagination", "true");
+    }
+    const qs = q.toString();
+    return list<AttendanceRecord>(`/attendance/records/${qs ? `?${qs}` : ""}`);
+  },
   analytics: () => apiFetch<{ total: number; by_status: { status: string; count: number }[] }>("/attendance/records/analytics/"),
   holidays: () => list<Holiday>("/attendance/holidays/"),
   leaves: () => list<LeaveRequest>("/attendance/leaves/"),
@@ -391,8 +430,16 @@ export const inventoryApi = {
 
 export const knowledgeApi = {
   list: () => list<KnowledgeArticle>("/knowledge/"),
-  create: (data: Partial<KnowledgeArticle>) =>
-    apiFetch<KnowledgeArticle>("/knowledge/", { method: "POST", body: JSON.stringify(data) }),
+  get: (slug: string) => apiFetch<KnowledgeArticle>(`/knowledge/${slug}/`),
+  create: (data: FormData | Partial<KnowledgeArticle>) =>
+    apiFetch<KnowledgeArticle>("/knowledge/", { 
+      method: "POST", 
+      body: data instanceof FormData ? data : JSON.stringify(data) 
+    }),
+  createQuestion: (data: Partial<KnowledgeQuestion>) =>
+    apiFetch<KnowledgeQuestion>("/knowledge/questions/", { method: "POST", body: JSON.stringify(data) }),
+  createAnswer: (data: Partial<KnowledgeAnswer>) =>
+    apiFetch<KnowledgeAnswer>("/knowledge/answers/", { method: "POST", body: JSON.stringify(data) }),
 };
 
 export const certificatesApi = {
@@ -536,7 +583,21 @@ export interface DailyUpdate {
   challenges: string; learning: string; tomorrow_plan: string; need_help: string;
 }
 export interface Meeting {
-  id: number; title: string; start_time: string; end_time: string; meet_link: string; agenda?: string; description?: string; organizer_detail?: User; participants?: number[];
+  id: number;
+  title: string;
+  start_time: string;
+  end_time: string;
+  meet_link: string;
+  agenda?: string;
+  description?: string;
+  organizer?: number;
+  organizer_detail?: User;
+  participants?: number[];
+  participants_detail?: User[];
+  department?: number;
+  department_detail?: Department;
+  team?: number;
+  team_detail?: Team;
 }
 export interface Announcement { id: number; title: string; content: string; priority: string; is_pinned: boolean; created_at: string; }
 export interface Notification { id: number; title: string; message: string; notification_type: string; priority: string; is_read: boolean; link: string; created_at: string; }
@@ -561,7 +622,9 @@ export interface LeaveRequest { id: number; leave_type: string; start_date: stri
 export interface Component { id: number; name: string; sku: string; category: string; quantity: number; min_stock: number; location: string; is_low_stock?: boolean; }
 export interface Equipment { id: number; name: string; serial_number: string; status: string; }
 export interface LabBooking { id: number; lab_name: string; start_time: string; end_time: string; purpose: string; status: string; booked_by_detail?: User; }
-export interface KnowledgeArticle { id: number; title: string; slug: string; content: string; article_type: string; tags: string[]; view_count: number; }
+export interface KnowledgeAnswer { id: number; question: number; author: number; author_detail?: User; answer_text: string; is_accepted: boolean; created_at: string; updated_at: string; }
+export interface KnowledgeQuestion { id: number; article: number; author: number; author_detail?: User; question_text: string; is_resolved: boolean; answers: KnowledgeAnswer[]; created_at: string; updated_at: string; }
+export interface KnowledgeArticle { id: number; title: string; slug: string; content: string; article_type: string; material_format?: string; tags: string[]; file_url?: string; file_upload?: string | null; view_count: number; questions?: KnowledgeQuestion[]; author_detail?: User; created_at?: string; updated_at?: string; }
 export interface Certificate { id: number; title: string; event_name: string; verification_code: string; issued_at: string; }
 export interface CertificateVerify { valid: boolean; title?: string; recipient?: string; event_name?: string; issued_at?: string; }
 export interface ClubEvent { id: number; title: string; slug: string; description: string; event_type: string; start_time: string; end_time: string; location: string; is_public: boolean; }
@@ -593,5 +656,5 @@ export interface AnalyticsDashboard {
 }
 export interface TrendPoint { date: string; updates: number; tasks_completed: number; }
 export interface Organization { id: number; name: string; slug: string; description: string; website: string; }
-export interface ComplianceStats { date: string; total_members: number; submitted: number; compliance_rate: number; }
+export interface ComplianceStats { date: string; total_members: number; submitted: number; compliance_rate: number; missing?: { id: number; first_name: string; last_name: string; email: string }[]; }
 export interface AuditLog { id: number; action: string; resource: string; user_name: string; created_at: string; }

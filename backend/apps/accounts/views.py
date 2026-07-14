@@ -113,9 +113,15 @@ class UserListView(generics.ListCreateAPIView):
         user = request.user
         if not user or not user.is_authenticated:
             return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
-        role_slug = user.role.slug if user.role else None
-        if role_slug not in ["founder", "president"] and not user.is_superuser:
-            return Response({"detail": "Only Founder or President can create users with roles."}, status=status.HTTP_403_FORBIDDEN)
+        
+        is_allowed_creator = user.is_superuser or (
+            user.role and user.role.slug in ["founder", "super_admin", "president"]
+        )
+        if not is_allowed_creator:
+            return Response(
+                {"detail": "Only Founder, Super Admin, or President can create users."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         return super().create(request, *args, **kwargs)
 
 
@@ -133,48 +139,29 @@ class UserDetailView(generics.RetrieveDestroyAPIView):
         target_user = self.get_object()
         request_user = request.user
 
-        # Superuser bypass / limit checks
-        if request_user.is_superuser:
-            if target_user.role and target_user.role.slug == "founder":
-                return Response(
-                    {"detail": "Only a President can delete a Founder user."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            target_user.delete()
-            return Response(status=status.HTTP_244_NO_CONTENT or status.HTTP_204_NO_CONTENT)
-
-        if not request_user.role:
-            return Response(
-                {"detail": "You do not have a role assigned and cannot delete accounts."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # "president can only create a founder role and no one other than can delete this role."
+        # 1. No one (not even super admin or superuser) can delete a founder
         if target_user.role and target_user.role.slug == "founder":
-            if request_user.role.slug != "president":
+            return Response(
+                {"detail": "A founder cannot be deleted by anyone, including super admins and superusers."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 2. Only president, founder, and super admin can delete users below their rank
+        if not request_user.is_superuser:
+            if not request_user.role or request_user.role.slug not in ["founder", "super_admin", "president"]:
                 return Response(
-                    {"detail": "Only a President can delete a Founder user."},
+                    {"detail": "Only Founder, Super Admin, or President can delete user accounts."},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            target_user.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
 
-        # Deleting other users: must be faculty or above (priority >= 70)
-        if request_user.role.priority < 70:
-            return Response(
-                {"detail": "You do not have permission to delete user accounts. You must be Faculty or above."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            request_priority = request_user.role.priority
+            target_priority = target_user.role.priority if target_user.role else 0
 
-        # "only higher rank can delete lower rank accounts"
-        request_priority = request_user.role.priority
-        target_priority = target_user.role.priority if target_user.role else 0
-
-        if request_priority <= target_priority:
-            return Response(
-                {"detail": "You can only delete accounts of a lower rank than yours."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            if request_priority <= target_priority:
+                return Response(
+                    {"detail": "You can only delete accounts of a lower rank than yours."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         target_user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -233,34 +220,31 @@ class UserRoleUpdateView(APIView):
             request_priority = request_role.priority
             target_priority = user.role.priority if user.role else 0
 
-            # 1. Founder can change anyone's role to anything (except unique limits)
+            # Only founder, super_admin, and president can change roles
+            if request_slug not in ["founder", "super_admin", "president"]:
+                return Response({"detail": "Only Founder, Super Admin, or President can change user roles."}, status=status.HTTP_403_FORBIDDEN)
+
+            # Enforce below rank rule + president exception
             if request_slug == "founder":
-                pass
-            # 2. President can assign Founder role plus all roles below Founder (priority < 110)
+                if role.priority >= 110:
+                    return Response({"detail": "You can only assign roles below yours."}, status=status.HTTP_403_FORBIDDEN)
+            elif request_slug == "super_admin":
+                if role.priority >= 100:
+                    return Response({"detail": "You can only assign roles below yours."}, status=status.HTTP_403_FORBIDDEN)
             elif request_slug == "president":
-                if role.slug == "founder" or role.priority < 110:
+                # President can assign Founder (110) or roles below President (< 90)
+                if role.slug == "founder":
+                    pass
+                elif role.priority < 90:
                     pass
                 else:
                     return Response(
-                        {"detail": "A President can only assign a Founder role plus all roles below it."},
+                        {"detail": "President can only assign Founder or roles below President."},
                         status=status.HTTP_403_FORBIDDEN
                     )
-            # 3. Other leadership roles
-            else:
-                # Cannot assign founder role
-                if role.slug == "founder":
-                    return Response({"detail": "Only the President can assign the Founder role."}, status=status.HTTP_403_FORBIDDEN)
-                
-                # Only higher rank can update role of a lower rank
-                if request_priority <= target_priority:
-                    return Response({"detail": "You can only change the role of users with a lower rank than yours."}, status=status.HTTP_403_FORBIDDEN)
-                
-                # Cannot assign a role higher than or equal to their own rank
-                if role.priority >= request_priority:
-                    return Response({"detail": "You cannot assign a role higher than or equal to your own rank."}, status=status.HTTP_403_FORBIDDEN)
 
-        # Enforce unique constraints on super_admin, founder, and president roles
-        if role.slug in ["founder", "super_admin", "president"]:
+        # Enforce unique constraints on founder, super_admin, president, and vice_president roles
+        if role.slug in ["founder", "super_admin", "president", "vice_president"]:
             dup_query = User.objects.filter(role=role, is_active=True).exclude(pk=user.pk)
             if dup_query.exists():
                 return Response(

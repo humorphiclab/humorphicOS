@@ -1,6 +1,8 @@
 import React from "react";
 import Link from "next/link";
 import { Users, FolderGit2, Rocket } from "lucide-react";
+import { getImageUrl } from "@/lib/api";
+
 
 interface User {
   id: number;
@@ -76,7 +78,7 @@ export function ProjectTeamCard({ project }: ProjectTeamCardProps) {
                 {team.members_detail?.slice(0, 3).map((member, i) => (
                   <div key={member.id} className="h-7 w-7 rounded-full border-2 border-[#121214] bg-indigo-900 flex items-center justify-center overflow-hidden z-[1]" style={{ zIndex: 10 - i }}>
                     {member.avatar ? (
-                      <img src={member.avatar} alt={member.full_name} className="h-full w-full object-cover" />
+                      <img src={getImageUrl(member.avatar) || undefined} alt={member.full_name} className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-[10px] text-white font-medium">{member.full_name.charAt(0)}</span>
                     )}

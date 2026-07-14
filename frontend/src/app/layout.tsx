@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -34,21 +35,16 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  const savedTheme = localStorage.getItem('theme') || 'dark';
-                  document.documentElement.setAttribute('data-theme', savedTheme);
-                } catch (e) {}
-              })();
-            `
-          }}
-        />
-      </head>
       <body className="min-h-full">
+        {/* Theme init runs before hydration – must use next/script, not a bare <script> tag */}
+        <Script id="theme-init" strategy="beforeInteractive">{`
+          (function() {
+            try {
+              var t = localStorage.getItem('theme') || 'dark';
+              document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {}
+          })();
+        `}</Script>
         <Providers>{children}</Providers>
         <Toaster position="top-right" richColors />
       </body>

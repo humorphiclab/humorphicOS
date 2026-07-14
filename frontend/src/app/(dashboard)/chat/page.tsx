@@ -164,7 +164,7 @@ function ChatPageContent() {
   // Check if a user is admin or superuser
   const isAdminOrSuperuser = (user: User | null) => {
     if (!user) return false;
-    return !!(user.is_superuser || (user.role && ["super_admin", "president"].includes(user.role.slug)));
+    return !!(user.is_superuser || (user.role && ["founder", "super_admin", "president"].includes(user.role.slug)));
   };
 
   // Helper to determine friendship status of a user

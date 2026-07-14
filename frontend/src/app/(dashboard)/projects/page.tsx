@@ -55,7 +55,8 @@ export default function ProjectsPage() {
     setCurrentUser(getStoredUser());
   }, []);
   const isSuperuser = currentUser?.is_superuser;
-  const isLead = currentUser?.is_superuser || currentUser?.role?.is_leadership || currentUser?.role?.slug === "team_lead" || currentUser?.role?.slug === "department_head" || false;
+  const canManage = isSuperuser || (currentUser?.role?.priority ?? 0) >= 80;
+  const isLead = canManage || currentUser?.role?.slug === "team_lead" || currentUser?.role?.slug === "department_head" || false;
 
   const [selectedProjectSlug, setSelectedProjectSlug] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -71,6 +72,14 @@ export default function ProjectsPage() {
   const [health, setHealth] = useState("on_track");
   const [owner, setOwner] = useState("");
 
+  // Project Inline Edit states
+  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [editProjectForm, setEditProjectForm] = useState({ title: "", description: "", status: "planning", health: "on_track", owner: "" });
+
+  // Team Inline Edit states
+  const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
+  const [editTeamForm, setEditTeamForm] = useState({ name: "", lead: "" });
+
   // Phases tree states
   const [newPhaseTitle, setNewPhaseTitle] = useState("");
   const [phaseError, setPhaseError] = useState<string | null>(null);
@@ -78,6 +87,14 @@ export default function ProjectsPage() {
   const [newSubLevelTitle, setNewSubLevelTitle] = useState("");
   const [activePhaseAddId, setActivePhaseAddId] = useState<number | null>(null);
   const [activeSubStageAddId, setActiveSubStageAddId] = useState<number | null>(null);
+
+  // Inline rename states
+  const [editingPhaseId, setEditingPhaseId] = useState<number | null>(null);
+  const [editingPhaseTitle, setEditingPhaseTitle] = useState("");
+  const [editingStageId, setEditingStageId] = useState<number | null>(null);
+  const [editingStageTitle, setEditingStageTitle] = useState("");
+  const [editingSubLevelId, setEditingSubLevelId] = useState<number | null>(null);
+  const [editingSubLevelTitle, setEditingSubLevelTitle] = useState("");
 
   // Teams & Members states
   const [selectedTeamIdForMembers, setSelectedTeamIdForMembers] = useState<number | "project">("project");
@@ -153,6 +170,24 @@ export default function ProjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       if (selectedProjectSlug) setSelectedProjectSlug(null);
+    },
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: ({ slug, data }: { slug: string; data: any }) => projectsApi.update(slug, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      setIsEditingProject(false);
+    },
+  });
+
+  const updateTeamMutation = useMutation({
+    mutationFn: ({ slug, data }: { slug: string; data: any }) => teamsApi.update(slug, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      setEditingTeamId(null);
     },
   });
 
@@ -247,6 +282,30 @@ export default function ProjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const renamePhaseMutation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) => projectPhasesApi.update(id, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      setEditingPhaseId(null);
+    },
+  });
+
+  const renameStageMutation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) => subStagesApi.update(id, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      setEditingStageId(null);
+    },
+  });
+
+  const renameSubLevelMutation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) => subLevelsApi.update(id, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectSlug] });
+      setEditingSubLevelId(null);
     },
   });
 
@@ -410,7 +469,7 @@ export default function ProjectsPage() {
               <h2 className="text-lg font-bold text-white">Projects</h2>
               <p className="text-muted text-[10px]">Select a project card to view details</p>
             </div>
-            {isSuperuser && (
+            {canManage && (
               <Button 
                 onClick={() => {
                   setIsCreateModalOpen(true);
@@ -447,7 +506,7 @@ export default function ProjectsPage() {
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <h3 className="font-bold text-base text-white group-hover:text-primary transition-colors line-clamp-1">{project.title}</h3>
-                        {isSuperuser && (
+                        {canManage && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -587,28 +646,76 @@ export default function ProjectsPage() {
                       <div className="space-y-6">
                         {/* Header details */}
                         <div className="border-b border-card-border pb-4 pr-10">
-                          <div className="flex flex-col gap-2">
-                            <h2 className="text-2xl font-black text-white leading-tight">{projectDetail.title}</h2>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              <span className="inline-block px-2.5 py-0.5 rounded-full border border-white/10 text-xs capitalize font-medium">
-                                {projectDetail.status.replace("_", " ")}
-                              </span>
-                              <span className={cn("px-2.5 py-0.5 rounded-full border text-xs capitalize", healthColors[projectDetail.health])}>
-                                {projectDetail.health.replace("_", " ")}
-                              </span>
-                            </div>
-                            <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Project Leader</p>
-                                <p className="text-sm font-semibold text-white mt-0.5">{projectDetail.owner_detail?.full_name || "None Assigned"}</p>
+                          {isEditingProject ? (
+                            <div className="space-y-3 max-w-xl">
+                              <h3 className="text-sm font-bold text-white">Edit Project</h3>
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-muted font-bold uppercase">Title</label>
+                                <input value={editProjectForm.title} onChange={e => setEditProjectForm({...editProjectForm, title: e.target.value})} className="w-full h-9 rounded-lg border border-card-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
                               </div>
-                              <div>
-                                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Department</p>
-                                <p className="text-sm font-semibold text-white mt-0.5">{projectDetail.department_detail?.name || "None"}</p>
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-muted font-bold uppercase">Description</label>
+                                <textarea value={editProjectForm.description} onChange={e => setEditProjectForm({...editProjectForm, description: e.target.value})} rows={2} className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-muted font-bold uppercase">Status</label>
+                                  <select value={editProjectForm.status} onChange={e => setEditProjectForm({...editProjectForm, status: e.target.value})} className="w-full h-9 rounded-lg border border-card-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                                    <option value="planning">Planning</option>
+                                    <option value="active">Active</option>
+                                    <option value="on_hold">On Hold</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="archived">Archived</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-muted font-bold uppercase">Health</label>
+                                  <select value={editProjectForm.health} onChange={e => setEditProjectForm({...editProjectForm, health: e.target.value})} className="w-full h-9 rounded-lg border border-card-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                                    <option value="on_track">On Track</option>
+                                    <option value="at_risk">At Risk</option>
+                                    <option value="off_track">Off Track</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-muted font-bold uppercase">Project Leader</label>
+                                <select value={editProjectForm.owner} onChange={e => setEditProjectForm({...editProjectForm, owner: e.target.value})} className="w-full h-9 rounded-lg border border-card-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                                  <option value="">— None —</option>
+                                  {members.map((m: any) => (<option key={m.id} value={m.id}>{m.full_name}</option>))}
+                                </select>
+                              </div>
+                              <div className="flex gap-2 pt-1">
+                                <Button size="sm" onClick={() => updateProjectMutation.mutate({ slug: projectDetail.slug, data: { title: editProjectForm.title, description: editProjectForm.description, status: editProjectForm.status, health: editProjectForm.health, owner: editProjectForm.owner ? Number(editProjectForm.owner) : null } })} disabled={updateProjectMutation.isPending} className="text-white h-8 text-xs">Save</Button>
+                                <Button size="sm" variant="outline" onClick={() => setIsEditingProject(false)} className="h-8 text-xs">Cancel</Button>
                               </div>
                             </div>
-                          </div>
-                          <p className="text-sm text-muted mt-4 leading-relaxed">{projectDetail.description || "No description provided."}</p>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <h2 className="text-2xl font-black text-white leading-tight">{projectDetail.title}</h2>
+                                {canManage && (
+                                  <button onClick={() => { setIsEditingProject(true); setEditProjectForm({ title: projectDetail.title, description: projectDetail.description || "", status: projectDetail.status, health: projectDetail.health, owner: projectDetail.owner ? String(projectDetail.owner) : "" }); }} className="shrink-0 p-1.5 rounded-lg border border-card-border text-muted hover:text-white hover:border-primary/50 transition-colors mt-1" title="Edit Project">
+                                    <ShieldAlert size={14} />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                <span className="inline-block px-2.5 py-0.5 rounded-full border border-white/10 text-xs capitalize font-medium">{projectDetail.status.replace("_", " ")}</span>
+                                <span className={cn("px-2.5 py-0.5 rounded-full border text-xs capitalize", healthColors[projectDetail.health])}>{projectDetail.health.replace("_", " ")}</span>
+                              </div>
+                              <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Project Leader</p>
+                                  <p className="text-sm font-semibold text-white mt-0.5">{projectDetail.owner_detail?.full_name || "None Assigned"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Department</p>
+                                  <p className="text-sm font-semibold text-white mt-0.5">{projectDetail.department_detail?.name || "None"}</p>
+                                </div>
+                              </div>
+                              <p className="text-sm text-muted mt-4 leading-relaxed">{projectDetail.description || "No description provided."}</p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Progress Bar Row */}
@@ -667,7 +774,7 @@ export default function ProjectsPage() {
                               </div>
 
                               {/* Add Phase Form */}
-                              {isSuperuser && (
+                              {canManage && (
                                 <div className="space-y-2 max-w-md">
                                   <form onSubmit={handleAddPhase} className="flex gap-2 w-full">
                                     <Input
@@ -695,7 +802,7 @@ export default function ProjectsPage() {
                                       <div className="flex justify-between items-center bg-white/2 -mx-4 -mt-4 p-3 rounded-t-xl border-b border-white/5">
                                         <div className="flex items-center gap-3">
                                           <RadioButton
-                                            disabled={!isSuperuser}
+                                            disabled={!canManage}
                                             checked={phase.is_completed}
                                             onCheckedChange={(checked) =>
                                               togglePhaseMutation.mutate({
@@ -704,12 +811,27 @@ export default function ProjectsPage() {
                                               })
                                             }
                                           />
-                                          <div>
-                                            <span className="font-bold text-sm text-white">{phase.title}</span>
-                                            <LinkedTasks tasks={phase.tasks} />
-                                          </div>
+                                           <div className="flex items-center gap-2 group/phase-title">
+                                             {editingPhaseId === phase.id ? (
+                                               <form onSubmit={e => { e.preventDefault(); renamePhaseMutation.mutate({ id: phase.id, title: editingPhaseTitle }); }} className="flex items-center gap-1">
+                                                 <input value={editingPhaseTitle} onChange={e => setEditingPhaseTitle(e.target.value)} autoFocus className="h-7 px-2 rounded border border-primary/50 bg-card text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary" />
+                                                 <button type="submit" className="text-[10px] bg-primary/20 hover:bg-primary/40 text-primary px-2 py-1 rounded font-bold">Save</button>
+                                                 <button type="button" onClick={() => setEditingPhaseId(null)} className="text-muted hover:text-white text-[10px] px-1">✕</button>
+                                               </form>
+                                             ) : (
+                                               <>
+                                                 <span className="font-bold text-sm text-white">{phase.title}</span>
+                                                 {canManage && (
+                                                   <button onClick={() => { setEditingPhaseId(phase.id); setEditingPhaseTitle(phase.title); }} className="opacity-0 group-hover/phase-title:opacity-100 transition-opacity p-0.5 rounded text-muted hover:text-primary" title="Rename phase">
+                                                     <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                                   </button>
+                                                 )}
+                                               </>
+                                             )}
+                                             <LinkedTasks tasks={phase.tasks} />
+                                           </div>
                                         </div>
-                                        {isSuperuser && (
+                                        {canManage && (
                                           <div className="flex gap-2">
                                             <button
                                               onClick={() => openTaskModal({ linked_phase: String(phase.id) })}
@@ -735,7 +857,7 @@ export default function ProjectsPage() {
                                               <div className="flex justify-between items-center group/stage">
                                                 <div className="flex items-center gap-3">
                                                   <RadioButton
-                                                    disabled={!isSuperuser}
+                                                    disabled={!canManage}
                                                     checked={stage.is_completed}
                                                     onCheckedChange={(checked) =>
                                                       toggleSubStageMutation.mutate({
@@ -744,12 +866,27 @@ export default function ProjectsPage() {
                                                       })
                                                     }
                                                   />
-                                                  <div>
-                                                    <span className="text-xs font-semibold text-white/80">{stage.title}</span>
-                                                    <LinkedTasks tasks={stage.tasks} />
-                                                  </div>
+                                                   <div className="flex items-center gap-2 group/stage-title">
+                                                     {editingStageId === stage.id ? (
+                                                       <form onSubmit={e => { e.preventDefault(); renameStageMutation.mutate({ id: stage.id, title: editingStageTitle }); }} className="flex items-center gap-1">
+                                                         <input value={editingStageTitle} onChange={e => setEditingStageTitle(e.target.value)} autoFocus className="h-6 px-2 rounded border border-primary/50 bg-card text-xs text-white focus:outline-none" />
+                                                         <button type="submit" className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Save</button>
+                                                         <button type="button" onClick={() => setEditingStageId(null)} className="text-muted text-[9px] px-1">✕</button>
+                                                       </form>
+                                                     ) : (
+                                                       <>
+                                                         <span className="text-xs font-semibold text-white/80">{stage.title}</span>
+                                                         {canManage && (
+                                                           <button onClick={() => { setEditingStageId(stage.id); setEditingStageTitle(stage.title); }} className="opacity-0 group-hover/stage-title:opacity-100 transition-opacity p-0.5 rounded text-muted hover:text-primary" title="Rename stage">
+                                                             <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                                           </button>
+                                                         )}
+                                                       </>
+                                                     )}
+                                                     <LinkedTasks tasks={stage.tasks} />
+                                                   </div>
                                                 </div>
-                                                {isSuperuser && (
+                                                {canManage && (
                                                   <div className="flex items-center gap-1 opacity-0 group-hover/stage:opacity-100 transition-all">
                                                     <button
                                                       onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id) })}
@@ -773,7 +910,7 @@ export default function ProjectsPage() {
                                                   <div key={sub.id} className="flex justify-between items-center group/sub text-[11px]">
                                                     <div className="flex items-center gap-3">
                                                       <RadioButton
-                                                        disabled={!isSuperuser}
+                                                        disabled={!canManage}
                                                         checked={sub.is_completed}
                                                         onCheckedChange={(checked) =>
                                                           toggleSubLevelMutation.mutate({
@@ -782,12 +919,27 @@ export default function ProjectsPage() {
                                                           })
                                                         }
                                                       />
-                                                      <div>
-                                                        <span className="text-white/60">{sub.title}</span>
-                                                        <LinkedTasks tasks={sub.tasks} />
-                                                      </div>
+                                                       <div className="flex items-center gap-2 group/sublevel-title">
+                                                         {editingSubLevelId === sub.id ? (
+                                                           <form onSubmit={e => { e.preventDefault(); renameSubLevelMutation.mutate({ id: sub.id, title: editingSubLevelTitle }); }} className="flex items-center gap-1">
+                                                             <input value={editingSubLevelTitle} onChange={e => setEditingSubLevelTitle(e.target.value)} autoFocus className="h-5 px-1.5 rounded border border-primary/50 bg-card text-[10px] text-white focus:outline-none" />
+                                                             <button type="submit" className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Save</button>
+                                                             <button type="button" onClick={() => setEditingSubLevelId(null)} className="text-muted text-[9px] px-1">✕</button>
+                                                           </form>
+                                                         ) : (
+                                                           <>
+                                                             <span className="text-white/60">{sub.title}</span>
+                                                             {canManage && (
+                                                               <button onClick={() => { setEditingSubLevelId(sub.id); setEditingSubLevelTitle(sub.title); }} className="opacity-0 group-hover/sublevel-title:opacity-100 transition-opacity p-0.5 rounded text-muted hover:text-primary" title="Rename sub-level">
+                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                                               </button>
+                                                             )}
+                                                           </>
+                                                         )}
+                                                         <LinkedTasks tasks={sub.tasks} />
+                                                       </div>
                                                     </div>
-                                                    {isSuperuser && (
+                                                    {canManage && (
                                                       <div className="flex items-center gap-1 opacity-0 group-hover/sub:opacity-100 transition-all">
                                                         <button
                                                           onClick={() => openTaskModal({ linked_phase: String(phase.id), linked_sub_stage: String(stage.id), linked_sub_level: String(sub.id) })}
@@ -807,7 +959,7 @@ export default function ProjectsPage() {
                                                 ))}
 
                                                 {/* Add SubLevel Trigger */}
-                                                {isSuperuser && activeSubStageAddId === stage.id ? (
+                                                {canManage && activeSubStageAddId === stage.id ? (
                                                   <form
                                                     onSubmit={(e) => handleAddSubLevel(e, stage.id)}
                                                     className="flex gap-2 w-full pt-1"
@@ -825,7 +977,7 @@ export default function ProjectsPage() {
                                                       <X size={12} />
                                                     </button>
                                                   </form>
-                                                ) : isSuperuser ? (
+                                                ) : canManage ? (
                                                   <button
                                                     onClick={() => {
                                                       setActiveSubStageAddId(stage.id);
@@ -842,7 +994,7 @@ export default function ProjectsPage() {
                                         })}
 
                                         {/* Add SubStage Trigger */}
-                                        {isSuperuser && activePhaseAddId === phase.id ? (
+                                        {canManage && activePhaseAddId === phase.id ? (
                                           <form
                                             onSubmit={(e) => handleAddSubStage(e, phase.id)}
                                             className="flex gap-2 w-full pt-1 pl-4"
@@ -945,20 +1097,47 @@ export default function ProjectsPage() {
                                         >
                                           <div className="flex justify-between items-start gap-2">
                                             <div>
-                                              <h5 className="font-bold text-xs text-white">{team.name}</h5>
-                                              <p className="text-[10px] text-muted mt-0.5 line-clamp-1">{team.description || "No description"}</p>
+                                              {editingTeamId === team.id ? (
+                                                <div className="space-y-1.5" onClick={e => e.stopPropagation()}>
+                                                  <input
+                                                    value={editTeamForm.name}
+                                                    onChange={e => setEditTeamForm({...editTeamForm, name: e.target.value})}
+                                                    className="w-full h-7 rounded border border-card-border bg-card px-2 text-xs text-foreground focus:outline-none"
+                                                    placeholder="Team name"
+                                                  />
+                                                  <select value={editTeamForm.lead} onChange={e => setEditTeamForm({...editTeamForm, lead: e.target.value})} className="w-full h-7 rounded border border-card-border bg-card px-2 text-[10px] text-foreground focus:outline-none">
+                                                    <option value="">— No Lead —</option>
+                                                    {members.map((m: any) => (<option key={m.id} value={m.id}>{m.full_name}</option>))}
+                                                  </select>
+                                                  <div className="flex gap-1">
+                                                    <button onClick={e => { e.stopPropagation(); updateTeamMutation.mutate({ slug: team.slug, data: { name: editTeamForm.name, lead: editTeamForm.lead ? Number(editTeamForm.lead) : null } }); }} className="h-6 px-2 bg-primary/20 hover:bg-primary/40 text-primary text-[10px] rounded font-bold">Save</button>
+                                                    <button onClick={e => { e.stopPropagation(); setEditingTeamId(null); }} className="h-6 px-2 bg-muted/20 text-muted text-[10px] rounded">Cancel</button>
+                                                  </div>
+                                                </div>
+                                              ) : (
+                                                <>
+                                                  <h5 className="font-bold text-xs text-white">{team.name}</h5>
+                                                  <p className="text-[10px] text-muted mt-0.5 line-clamp-1">{team.description || "No description"}</p>
+                                                </>
+                                              )}
                                             </div>
-                                            {isSuperuser && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  deleteTeamMutation.mutate(team.slug);
-                                                }}
-                                                className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors opacity-0 group-hover:opacity-100"
-                                                title="Delete Team"
-                                              >
-                                                <Trash2 size={12} />
-                                              </button>
+                                            {canManage && editingTeamId !== team.id && (
+                                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); setEditingTeamId(team.id); setEditTeamForm({ name: team.name, lead: team.lead ? String(team.lead) : "" }); }}
+                                                  className="p-1 rounded text-muted hover:text-primary hover:bg-primary/10 transition-colors"
+                                                  title="Edit Team"
+                                                >
+                                                  <ShieldAlert size={11} />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); deleteTeamMutation.mutate(team.slug); }}
+                                                  className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                                                  title="Delete Team"
+                                                >
+                                                  <Trash2 size={12} />
+                                                </button>
+                                              </div>
                                             )}
                                           </div>
                                           <div className="mt-2 pt-1.5 border-t border-white/5 flex justify-between items-center text-[9px] text-muted">
@@ -1055,7 +1234,7 @@ export default function ProjectsPage() {
                                             <span className="text-xs font-bold text-white truncate">{m.full_name}</span>
                                             <span className="text-[8px] uppercase tracking-wider font-semibold text-primary/80 mt-0.5">{m.role?.name || "Member"}</span>
                                           </div>
-                                          {selectedTeamIdForMembers !== "project" && activeSelectedTeamObj && isSuperuser && (
+                                          {selectedTeamIdForMembers !== "project" && activeSelectedTeamObj && canManage && (
                                             <button
                                               onClick={() => {
                                                 updateTeamMembersMutation.mutate({

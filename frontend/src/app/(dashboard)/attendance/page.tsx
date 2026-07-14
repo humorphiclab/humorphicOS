@@ -6,13 +6,15 @@ import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { attendanceApi, apiFetch, getStoredUser, getImageUrl } from "@/lib/api";
-import { CheckCircle, QrCode, Calendar, Clock, AlertCircle, Sparkles, Check, X, Camera, UserCheck } from "lucide-react";
+import { attendanceApi, apiFetch, getStoredUser, getImageUrl, authApi, membersApi } from "@/lib/api";
+import { CheckCircle, QrCode, Calendar, Clock, AlertCircle, Sparkles, Check, X, Camera, UserCheck, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function AttendancePage() {
   const qc = useQueryClient();
   const user = getStoredUser();
   const isLead = user?.role?.is_leadership;
+  const isAuthority = user?.is_superuser || user?.role?.is_leadership || (user?.role?.priority && user.role.priority >= 70);
 
   const [faceMsg, setFaceMsg] = useState("");
   const [faceErr, setFaceErr] = useState("");
@@ -30,24 +32,40 @@ export default function AttendancePage() {
   const [leaveError, setLeaveError] = useState("");
   const [leaveSuccess, setLeaveSuccess] = useState("");
 
-  const [selectedDate, setSelectedDate] = useState("");
-  const { data: records, isLoading } = useQuery({
-    queryKey: ["attendance", selectedDate],
-    queryFn: () => attendanceApi.records(selectedDate),
+  // Month / Year for Calendar and Matrix
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()); // 0-11
+  const [matrixSearch, setMatrixSearch] = useState("");
+
+  // Student selection for leadership calendar
+  const [selectedStudentId, setSelectedStudentId] = useState<number>(user?.id || 0);
+
+  // Queries
+  const { data: membersList } = useQuery({
+    queryKey: ["members-list"],
+    queryFn: () => authApi.users(),
+    enabled: !!isAuthority,
   });
+
+  const { data: allRecords, isLoading: recordsLoading } = useQuery({
+    queryKey: ["attendance-records-all"],
+    queryFn: () => attendanceApi.records({ no_pagination: true }),
+  });
+
   const { data: analytics } = useQuery({ queryKey: ["attendance-analytics"], queryFn: attendanceApi.analytics });
   const { data: leaves } = useQuery({ queryKey: ["leaves"], queryFn: attendanceApi.leaves });
   const { data: holidays } = useQuery({ queryKey: ["holidays"], queryFn: attendanceApi.holidays });
 
+  // Mutations
   const markMutation = useMutation({
     mutationFn: attendanceApi.mark,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance-records-all"] }),
   });
 
   const faceMutation = useMutation({
     mutationFn: attendanceApi.faceCheckin,
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["attendance"] });
+      qc.invalidateQueries({ queryKey: ["attendance-records-all"] });
       setFaceMsg(`Face check-in verified successfully: ${data.notes || "Present"}`);
       setFaceErr("");
     },
@@ -60,7 +78,7 @@ export default function AttendancePage() {
   const scanMutation = useMutation({
     mutationFn: () => apiFetch("/attendance/records/scan_qr/", { method: "POST", body: JSON.stringify({ token: qrToken }) }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["attendance"] });
+      qc.invalidateQueries({ queryKey: ["attendance-records-all"] });
       setQrToken("");
     },
   });
@@ -114,10 +132,83 @@ export default function AttendancePage() {
     }
   };
 
+  // Calendar Math
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+  };
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+
+  const calendarDays = [];
+  for (let i = 0; i < firstDayIndex; i++) {
+    calendarDays.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    const mm = String(currentMonth + 1).padStart(2, "0");
+    const dd = String(i).padStart(2, "0");
+    calendarDays.push({
+      day: i,
+      dateStr: `${currentYear}-${mm}-${dd}`,
+    });
+  }
+
+  // Matrix Math
+  const matrixDays: number[] = [];
+  for (let i = 1; i <= daysInMonth; i++) {
+    matrixDays.push(i);
+  }
+
+  const filteredMembers = membersList?.filter((m) =>
+    `${m.first_name} ${m.last_name} ${m.username}`
+      .toLowerCase()
+      .includes(matrixSearch.toLowerCase())
+  ) || [];
+
+  const dailyStrengths = matrixDays.map((dayNum) => {
+    const mm = String(currentMonth + 1).padStart(2, "0");
+    const dd = String(dayNum).padStart(2, "0");
+    const dateStr = `${currentYear}-${mm}-${dd}`;
+
+    const totalMembersCount = membersList?.length || 1;
+    const presentCount = allRecords?.filter(
+      (r) => r.date === dateStr && (r.status === "present" || r.status === "late")
+    ).length || 0;
+
+    const strengthPercentage = Math.round((presentCount / totalMembersCount) * 100);
+
+    return {
+      dateStr,
+      presentCount,
+      totalMembersCount,
+      percentage: strengthPercentage,
+    };
+  });
+
   return (
     <>
       <TopBar title="Attendance & Leaves" />
-      <div className="p-6 space-y-6 max-w-6xl">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        {/* Top Summary Widgets */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <p className="text-sm text-muted">Total Attendance Records</p>
@@ -133,6 +224,7 @@ export default function AttendancePage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
+            {/* Mark Attendance Card */}
             <Card>
               <h3 className="font-semibold mb-4">Mark Today&apos;s Attendance</h3>
               <div className="flex flex-wrap gap-3">
@@ -165,6 +257,7 @@ export default function AttendancePage() {
               {faceErr && <p className="text-xs text-danger mt-3 font-semibold flex items-center gap-1.5"><AlertCircle className="h-4 w-4" /> {faceErr}</p>}
             </Card>
 
+            {/* QR Generation (Admin) */}
             {isLead && (
               <Card>
                 <h3 className="font-semibold mb-4 flex items-center gap-2"><QrCode className="h-4 w-4" /> QR Attendance (Leadership)</h3>
@@ -178,6 +271,7 @@ export default function AttendancePage() {
               </Card>
             )}
 
+            {/* Scan QR Token Card */}
             <Card>
               <h3 className="font-semibold mb-4">Scan QR Token</h3>
               <div className="flex gap-2 max-w-md">
@@ -186,7 +280,7 @@ export default function AttendancePage() {
               </div>
             </Card>
 
-            {/* Leave Approval Panel for Leaders */}
+            {/* Pending Leave Requests for Admins */}
             {isLead && leaves && leaves.filter(l => l.status === "pending").length > 0 && (
               <Card className="border-warning/30 bg-warning/5">
                 <h3 className="font-semibold mb-4 text-warning flex items-center gap-2">
@@ -231,95 +325,138 @@ export default function AttendancePage() {
               </Card>
             )}
 
-            {/* Attendance History */}
-            <Card>
-              <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
-                <h3 className="font-semibold">Recent Attendance Records</h3>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="filter-date" className="text-xs text-muted whitespace-nowrap">Filter Date:</Label>
-                  <Input
-                    id="filter-date"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="h-8 w-40 text-xs py-1"
-                  />
-                  {selectedDate && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedDate("")}
-                      className="h-8 px-2 text-xs"
-                    >
-                      Clear
-                    </Button>
+            {/* Attendance Month Calendar (Replaces Recent Attendance Records list) */}
+            <Card className="p-5 border-card-border bg-card">
+              <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+                <div>
+                  <h3 className="font-semibold text-base">Attendance Calendar</h3>
+                  {isAuthority && membersList && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Label htmlFor="student-select" className="text-xs text-muted">Viewing Student:</Label>
+                      <select
+                        id="student-select"
+                        className="rounded-lg border border-card-border bg-card px-2 py-1 text-xs text-foreground focus:border-primary focus:outline-none"
+                        value={selectedStudentId}
+                        onChange={(e) => setSelectedStudentId(Number(e.target.value))}
+                      >
+                        {membersList.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.first_name} {m.last_name} ({m.username})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
-              </div>
-              {isLoading ? (
-                <p className="text-muted text-sm">Loading...</p>
-              ) : !records?.length ? (
-                <p className="text-muted text-sm">No attendance records yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-card-border text-muted">
-                        {isLead && <th className="pb-2 font-medium">Member</th>}
-                        <th className="pb-2 font-medium">Date</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium">Method</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-card-border">
-                      {(selectedDate ? records : records.slice(0, 10)).map((r) => (
-                        <tr key={r.id} className="hover:bg-muted/5">
-                          {isLead && (
-                            <td className="py-2.5 font-medium flex items-center gap-2">
-                              {r.user_detail?.avatar ? (
-                                <img
-                                  src={getImageUrl(r.user_detail.avatar) || ""}
-                                  alt=""
-                                  className="h-6 w-6 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
-                                  {r.user_detail?.first_name?.[0] ?? r.user_detail?.username?.[0] ?? "?"}
-                                </div>
-                              )}
-                              <span>{r.user_detail?.full_name || r.user_detail?.username || "Unknown"}</span>
-                            </td>
-                          )}
-                          <td className="py-2.5">{r.date}</td>
-                          <td className="py-2.5 capitalize font-medium text-primary">{r.status}</td>
-                          <td className="py-2.5 capitalize text-muted">{r.method}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                
+                {/* Month navigation */}
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handlePrevMonth} className="h-8 w-8 p-0">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-semibold min-w-[100px] text-center">
+                    {monthNames[currentMonth]} {currentYear}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={handleNextMonth} className="h-8 w-8 p-0">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-            </Card>
+              </div>
 
-            {/* Leaves List */}
-            <Card>
-              <h3 className="font-semibold mb-4">My Leave Requests</h3>
-              {!leaves?.length ? (
-                <p className="text-muted text-sm">No leave requests found.</p>
+              {recordsLoading ? (
+                <div className="py-12 text-center text-muted text-xs animate-pulse">Loading attendance history...</div>
               ) : (
-                <div className="space-y-3">
-                  {leaves.map((l) => (
-                    <div key={l.id} className="flex justify-between items-start border-b border-card-border pb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm capitalize">{l.leave_type} Leave</p>
-                          {getLeaveStatusBadge(l.status)}
+                <div className="space-y-4">
+                  {/* Grid of days of the week */}
+                  <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-bold tracking-wider uppercase text-muted">
+                    <div>Sun</div>
+                    <div>Mon</div>
+                    <div>Tue</div>
+                    <div>Wed</div>
+                    <div>Thu</div>
+                    <div>Fri</div>
+                    <div>Sat</div>
+                  </div>
+
+                  {/* Grid of calendar days */}
+                  <div className="grid grid-cols-7 gap-2">
+                    {calendarDays.map((dayObj, idx) => {
+                      if (!dayObj) {
+                        return <div key={`empty-${idx}`} className="h-14 bg-muted/5 rounded-lg border border-card-border/10 opacity-20" />;
+                      }
+
+                      const { day, dateStr } = dayObj;
+                      const record = allRecords?.find((r) => r.user_detail?.id === selectedStudentId && r.date === dateStr);
+                      const holiday = holidays?.find((h) => h.date === dateStr);
+
+                      let dayClass = "bg-card border-card-border/60 text-foreground hover:bg-muted/10";
+                      let statusText = "";
+                      let timeText = "";
+
+                      if (record) {
+                        if (record.status === "present") {
+                          dayClass = "bg-success/15 border-success/30 text-success-foreground hover:bg-success/20";
+                          statusText = "Present";
+                        } else if (record.status === "absent") {
+                          dayClass = "bg-danger/15 border-danger/30 text-danger-foreground hover:bg-danger/20";
+                          statusText = "Absent";
+                        } else if (record.status === "late") {
+                          dayClass = "bg-warning/15 border-warning/30 text-warning-foreground hover:bg-warning/20";
+                          statusText = "Late";
+                        } else if (record.status === "leave") {
+                          dayClass = "bg-info/15 border-info/30 text-info-foreground hover:bg-info/20";
+                          statusText = "Leave";
+                        }
+                        if (record.check_in) {
+                          timeText = new Date(record.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        }
+                      } else if (holiday) {
+                        dayClass = "bg-purple-500/10 border-purple-500/30 text-purple-500 hover:bg-purple-500/20";
+                        statusText = "Holiday";
+                      }
+
+                      const isToday = new Date().toDateString() === new Date(currentYear, currentMonth, day).toDateString();
+
+                      return (
+                        <div
+                          key={`day-${day}`}
+                          className={cn(
+                            "relative h-14 p-1.5 rounded-lg border flex flex-col justify-between transition-all duration-200 cursor-pointer",
+                            dayClass,
+                            isToday && "ring-1.5 ring-primary ring-offset-1 ring-offset-background"
+                          )}
+                          title={holiday ? `${holiday.name}: ${holiday.description || ""}` : record ? `Method: ${record.method}, Notes: ${record.notes || "None"}` : "No Record"}
+                        >
+                          <span className="text-xs font-bold">{day}</span>
+                          {statusText && (
+                            <div className="flex flex-col text-[8px] leading-tight font-semibold opacity-90 truncate w-full items-start">
+                              <span className="uppercase">{statusText}</span>
+                              {timeText && <span className="text-[7px] opacity-75">{timeText}</span>}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs text-muted mt-1">Dates: {l.start_date} to {l.end_date}</p>
-                        <p className="text-xs text-muted mt-1 italic">&quot;{l.reason}&quot;</p>
-                      </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-4 pt-3 text-[10px] text-muted border-t border-card-border/40">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-success" /> Present
                     </div>
-                  ))}
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-warning" /> Late
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-danger" /> Absent
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-info" /> Leave Approved
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-purple-500" /> Holiday
+                    </div>
+                  </div>
                 </div>
               )}
             </Card>
@@ -414,8 +551,142 @@ export default function AttendancePage() {
                 </ul>
               )}
             </Card>
+
+            {/* My Leave Requests Card */}
+            <Card>
+              <h3 className="font-semibold mb-4">My Leave Requests</h3>
+              {!leaves?.length ? (
+                <p className="text-muted text-sm">No leave requests found.</p>
+              ) : (
+                <div className="space-y-3">
+                  {leaves.map((l) => (
+                    <div key={l.id} className="flex justify-between items-start border-b border-card-border pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm capitalize">{l.leave_type} Leave</p>
+                          {getLeaveStatusBadge(l.status)}
+                        </div>
+                        <p className="text-xs text-muted mt-1">Dates: {l.start_date} to {l.end_date}</p>
+                        <p className="text-xs text-muted mt-1 italic">&quot;{l.reason}&quot;</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
+
+        {/* Leadership View: All Student Matrix */}
+        {isAuthority && (
+          <Card className="p-5 border-card-border bg-card/40 backdrop-blur">
+            <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
+              <div>
+                <h3 className="font-semibold text-base">All Student Attendance Matrix</h3>
+                <p className="text-xs text-muted">Daily attendance overview for {monthNames[currentMonth]} {currentYear}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search student..."
+                  value={matrixSearch}
+                  onChange={(e) => setMatrixSearch(e.target.value)}
+                  className="h-8 w-48 text-xs py-1"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto border border-card-border/60 rounded-xl">
+              <table className="w-full border-collapse text-xs text-left min-w-[800px]">
+                <thead>
+                  <tr className="border-b border-card-border bg-muted/20">
+                    <th className="p-3 font-semibold sticky left-0 bg-card z-10 w-48 border-r border-card-border/60">Student</th>
+                    {matrixDays.map((d) => (
+                      <th key={`th-${d}`} className="p-2 text-center font-semibold border-r border-card-border/40 min-w-[28px]">
+                        {d}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-card-border/40">
+                  {filteredMembers.map((member) => {
+                    return (
+                      <tr key={member.id} className="hover:bg-muted/10 transition-colors">
+                        <td className="p-3 font-medium sticky left-0 bg-card z-10 flex items-center gap-2 border-r border-card-border/60 w-48">
+                          {member.avatar ? (
+                            <img
+                              src={getImageUrl(member.avatar) || ""}
+                              alt=""
+                              className="h-6 w-6 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                              {member.first_name?.[0] ?? member.username?.[0] ?? "?"}
+                            </div>
+                          )}
+                          <span className="truncate max-w-[130px]" title={`${member.first_name} ${member.last_name}`}>
+                            {member.first_name} {member.last_name}
+                          </span>
+                        </td>
+                        {matrixDays.map((d) => {
+                          const mm = String(currentMonth + 1).padStart(2, "0");
+                          const dd = String(d).padStart(2, "0");
+                          const dateStr = `${currentYear}-${mm}-${dd}`;
+                          const record = allRecords?.find((r) => r.user_detail?.id === member.id && r.date === dateStr);
+                          
+                          let dotColor = "bg-muted-foreground/20";
+                          let titleStr = "No Record";
+                          if (record) {
+                            if (record.status === "present") {
+                              dotColor = "bg-success";
+                              titleStr = "Present";
+                            } else if (record.status === "absent") {
+                              dotColor = "bg-danger";
+                              titleStr = "Absent";
+                            } else if (record.status === "late") {
+                              dotColor = "bg-warning";
+                              titleStr = "Late";
+                            } else if (record.status === "leave") {
+                              dotColor = "bg-info";
+                              titleStr = "Leave";
+                            }
+                          }
+
+                          return (
+                            <td key={`td-${member.id}-${d}`} className="p-2 text-center border-r border-card-border/40" title={`${member.first_name}: ${titleStr}`}>
+                              <div className={`h-2.5 w-2.5 rounded-full ${dotColor} mx-auto transition-transform hover:scale-125`} />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+
+                  {/* Daily Strength row at the bottom */}
+                  <tr className="border-t-2 border-card-border bg-primary/5 font-semibold text-primary">
+                    <td className="p-3 sticky left-0 bg-card z-10 border-r border-card-border/60 w-48">
+                      Daily Strength
+                    </td>
+                    {dailyStrengths.map((str, idx) => {
+                      let textClass = "text-muted-foreground";
+                      if (str.percentage >= 80) textClass = "text-success font-bold";
+                      else if (str.percentage >= 50) textClass = "text-warning font-bold";
+                      else if (str.percentage > 0) textClass = "text-danger font-bold";
+
+                      return (
+                        <td key={`strength-${idx}`} className="p-2 text-center border-r border-card-border/40" title={`Strength: ${str.percentage}% (${str.presentCount}/${str.totalMembersCount})`}>
+                          <div className={`text-[10px] ${textClass}`}>
+                            {str.presentCount}/{str.totalMembersCount}
+                          </div>
+                          <div className="text-[8px] opacity-70 mt-0.5">{str.percentage}%</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </div>
     </>
   );

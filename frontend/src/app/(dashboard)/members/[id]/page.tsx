@@ -93,7 +93,7 @@ export default function MemberProfilePage() {
   // Helpers
   const isAdminOrSuperuser = (u: User | null | undefined) => {
     if (!u) return false;
-    return !!(u.is_superuser || (u.role && ["super_admin", "president"].includes(u.role.slug)));
+    return !!(u.is_superuser || (u.role && ["founder", "super_admin", "president"].includes(u.role.slug)));
   };
 
   const getFriendshipState = () => {

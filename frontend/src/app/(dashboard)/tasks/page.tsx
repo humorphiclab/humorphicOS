@@ -1,5 +1,4 @@
 "use client";
-// Force type re-evaluation
 
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,9 +6,9 @@ import { TopBar } from "@/components/layout/sidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { apiFetch, getStoredUser, membersApi, projectsApi, tasksApi, departmentsApi, teamsApi, Project } from "@/lib/api";
+import { apiFetch, getStoredUser, membersApi, projectsApi, tasksApi, departmentsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Paperclip, UploadCloud, Check, Plus } from "lucide-react";
+import { Paperclip, UploadCloud, Plus, Layers3 } from "lucide-react";
 
 const STATUSES = ["todo", "in_progress", "review", "done", "blocked"] as const;
 
@@ -30,8 +29,10 @@ export default function TasksPage() {
   const tabs: ("list" | "kanban" | "create")[] = ["list", "kanban", "create"];
 
   const [assignType, setAssignType] = useState<"member" | "project" | "department">("member");
+  const [assigneeType, setAssigneeType] = useState<"single" | "multiple" | "all">("single");
   const [projectTargetType, setProjectTargetType] = useState<"team" | "member">("team");
 
+  // Create Form State
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -46,50 +47,48 @@ export default function TasksPage() {
     linked_sub_level: "",
   });
 
+  // Selected members for bulk assign
+  const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
+
   const [attachments, setAttachments] = useState<File[]>([]);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [taskUploads, setTaskUploads] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [statusNote, setStatusNote] = useState("");
 
+  // Queries
   const { data: tasks, isLoading } = useQuery({ queryKey: ["my-tasks"], queryFn: tasksApi.myTasks });
   const { data: kanban } = useQuery({ queryKey: ["kanban"], queryFn: () => tasksApi.kanban(), enabled: tab === "kanban" });
 
-  const { data: members } = useQuery({ queryKey: ["members"], queryFn: membersApi.list, enabled: isLead && assignType === "member" });
+  const { data: members } = useQuery({
+    queryKey: ["members"],
+    queryFn: membersApi.list,
+    enabled: isLead && assignType === "member" && tab === "create",
+  });
 
   const { data: departments } = useQuery({ queryKey: ["departments"], queryFn: departmentsApi.list, enabled: isLead && assignType === "department" });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: projectsApi.list, enabled: isLead });
 
-  // When a project is selected, fetch its details to get the phases tree
   const { data: selectedProjectDetail } = useQuery({
     queryKey: ["projectDetail", form.project],
     queryFn: () => projectsApi.get(projects?.find(p => p.id === Number(form.project))?.slug || ""),
-    enabled: !!form.project
+    enabled: !!form.project,
   });
 
-  // Calculate all unique members involved in the selected project
   const allProjectMembers = React.useMemo(() => {
     if (!selectedProjectDetail) return [];
-
     const membersMap = new Map();
-
-    // Add explicit members
     (selectedProjectDetail.members_detail || []).forEach((m: any) => membersMap.set(m.id, m));
-
-    // Add team members and leads
     (selectedProjectDetail.teams_detail || []).forEach((t: any) => {
       if (t.lead_detail) membersMap.set(t.lead_detail.id, t.lead_detail);
       (t.members_detail || []).forEach((m: any) => membersMap.set(m.id, m));
     });
-
     return Array.from(membersMap.values());
   }, [selectedProjectDetail]);
 
   const createTask = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       const task = await tasksApi.create(data);
-
-      // Upload attachments if any
       for (const file of attachments) {
         await tasksApi.uploadAttachment(task.id, file);
       }
@@ -105,12 +104,14 @@ export default function TasksPage() {
         project: "", linked_phase: "", linked_sub_stage: "", linked_sub_level: ""
       });
       setAssignType("member");
+      setAssigneeType("single");
       setProjectTargetType("team");
       setAttachments([]);
+      setSelectedMembers([]);
     },
     onError: (err: any) => {
       alert(err.message || "Failed to create task");
-    }
+    },
   });
 
   const updateStatus = useMutation({
@@ -121,10 +122,26 @@ export default function TasksPage() {
     },
   });
 
+  // Client-side permission helper matching backend restrictions
+  const canUserModifyTask = (task: any) => {
+    if (!user) return false;
+    if (user.is_superuser) return true;
+    if (task.assigned_by === user.id) return true;
+    if (task.assignee === user.id) return true;
+
+    if (task.assigned_team_detail) {
+      if (task.assigned_team_detail.lead === user.id) return true;
+    }
+    if (task.assigned_department_detail) {
+      if (task.assigned_department_detail.head === user.id) return true;
+    }
+    return false;
+  };
+
   return (
     <>
       <TopBar title="Tasks" />
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-4 max-w-7xl mx-auto">
         <div className="flex gap-2">
           {tabs.map((t) => (
             <Button key={t} variant={tab === t ? "primary" : "secondary"} size="sm" onClick={() => setTab(t)} className="capitalize">
@@ -133,26 +150,84 @@ export default function TasksPage() {
           ))}
         </div>
 
+        {/* Tab: Create Task */}
         {tab === "create" && (
           <Card>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                createTask.mutate({
-                  title: form.title,
-                  description: form.description,
-                  priority: form.priority,
-                  ...(form.due_date ? { due_date: form.due_date } : {}),
-                  status: "todo",
-                  ...(isLead && assignType === "member" && form.assignee ? { assignee: form.assignee === "all" ? "all" : Number(form.assignee) } : !isLead && user?.id ? { assignee: user.id } : {}),
-                  ...(isLead && assignType === "project" && projectTargetType === "team" && form.assigned_team ? { assigned_team: Number(form.assigned_team) } : {}),
-                  ...(isLead && assignType === "project" && projectTargetType === "member" && form.assignee ? { assignee: Number(form.assignee) } : {}),
-                  ...(isLead && assignType === "department" && form.assigned_department ? { assigned_department: Number(form.assigned_department) } : {}),
-                  ...((form.project && assignType === "project") ? { project: Number(form.project) } : {}),
-                  ...((form.linked_phase && assignType === "project") ? { linked_phase: Number(form.linked_phase) } : {}),
-                  ...((form.linked_sub_stage && assignType === "project") ? { linked_sub_stage: Number(form.linked_sub_stage) } : {}),
-                  ...((form.linked_sub_level && assignType === "project") ? { linked_sub_level: Number(form.linked_sub_level) } : {}),
-                });
+
+                if (!isLead) {
+                  // General member self-assign
+                  createTask.mutate({
+                    title: form.title,
+                    description: form.description,
+                    priority: form.priority,
+                    ...(form.due_date ? { due_date: form.due_date } : {}),
+                    status: "todo",
+                    assignee: user?.id,
+                  });
+                  return;
+                }
+
+                // Lead assignment options
+                if (assignType === "member") {
+                  if (assigneeType === "all") {
+                    createTask.mutate({
+                      title: form.title,
+                      description: form.description,
+                      priority: form.priority,
+                      ...(form.due_date ? { due_date: form.due_date } : {}),
+                      status: "todo",
+                      assignee: "all",
+                    });
+                  } else if (assigneeType === "multiple") {
+                    if (selectedMembers.length === 0) {
+                      alert("Please select at least one member.");
+                      return;
+                    }
+                    createTask.mutate({
+                      title: form.title,
+                      description: form.description,
+                      priority: form.priority,
+                      ...(form.due_date ? { due_date: form.due_date } : {}),
+                      status: "todo",
+                      selected_members: selectedMembers,
+                    });
+                  } else {
+                    createTask.mutate({
+                      title: form.title,
+                      description: form.description,
+                      priority: form.priority,
+                      ...(form.due_date ? { due_date: form.due_date } : {}),
+                      status: "todo",
+                      ...(form.assignee ? { assignee: Number(form.assignee) } : {}),
+                    });
+                  }
+                } else if (assignType === "project") {
+                  createTask.mutate({
+                    title: form.title,
+                    description: form.description,
+                    priority: form.priority,
+                    ...(form.due_date ? { due_date: form.due_date } : {}),
+                    status: "todo",
+                    project: Number(form.project),
+                    ...(projectTargetType === "team" && form.assigned_team ? { assigned_team: Number(form.assigned_team) } : {}),
+                    ...(projectTargetType === "member" && form.assignee ? { assignee: Number(form.assignee) } : {}),
+                    ...(form.linked_phase ? { linked_phase: Number(form.linked_phase) } : {}),
+                    ...(form.linked_sub_stage ? { linked_sub_stage: Number(form.linked_sub_stage) } : {}),
+                    ...(form.linked_sub_level ? { linked_sub_level: Number(form.linked_sub_level) } : {}),
+                  });
+                } else if (assignType === "department") {
+                  createTask.mutate({
+                    title: form.title,
+                    description: form.description,
+                    priority: form.priority,
+                    ...(form.due_date ? { due_date: form.due_date } : {}),
+                    status: "todo",
+                    assigned_department: Number(form.assigned_department),
+                  });
+                }
               }}
               className="grid grid-cols-1 md:grid-cols-2 gap-6"
             >
@@ -177,29 +252,100 @@ export default function TasksPage() {
                 </div>
 
                 {/* Assignment Controls */}
-                {isLead && (
-                  <div className="p-4 border rounded-lg bg-card/50">
-                    <h4 className="text-sm font-medium mb-3">Assignment Target</h4>
-                    <div className="flex gap-2 mb-4 border-b border-card-border pb-3">
+                {isLead ? (
+                  <div className="p-4 border rounded-lg bg-card/50 space-y-4">
+                    <h4 className="text-sm font-medium">Assignment Target</h4>
+                    <div className="flex gap-2 border-b border-card-border pb-3">
                       <Button type="button" size="sm" variant={assignType === "member" ? "primary" : "secondary"} onClick={() => { setAssignType("member"); setForm({ ...form, project: "", assignee: "" }); }}>Standalone Member</Button>
                       <Button type="button" size="sm" variant={assignType === "project" ? "primary" : "secondary"} onClick={() => { setAssignType("project"); setForm({ ...form, assignee: "", assigned_team: "", assigned_department: "" }); }}>Project Workflow</Button>
                       <Button type="button" size="sm" variant={assignType === "department" ? "primary" : "secondary"} onClick={() => { setAssignType("department"); setForm({ ...form, project: "", assignee: "", assigned_team: "" }); }}>Department</Button>
                     </div>
 
                     {assignType === "member" && (
-                      <div className="space-y-1">
-                        <Label>Select Member</Label>
-                        <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
-                          value={form.assignee}
-                          onChange={(e) => setForm({ ...form, assignee: e.target.value })}
-                        >
-                          <option value="">Unassigned</option>
-                          <option value="all">All Members</option>
-                          {(members ?? []).map((m) => (
-                            <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
-                          ))}
-                        </select>
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs text-muted block mb-1">Assign Mode</Label>
+                          <div className="flex gap-3 mb-2">
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name="assignee_type"
+                                checked={assigneeType === "single"}
+                                onChange={() => setAssigneeType("single")}
+                                className="text-primary focus:ring-primary h-3.5 w-3.5"
+                              />
+                              Single Member
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name="assignee_type"
+                                checked={assigneeType === "multiple"}
+                                onChange={() => setAssigneeType("multiple")}
+                                className="text-primary focus:ring-primary h-3.5 w-3.5"
+                              />
+                              Multiple Members
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name="assignee_type"
+                                checked={assigneeType === "all"}
+                                onChange={() => setAssigneeType("all")}
+                                className="text-primary focus:ring-primary h-3.5 w-3.5"
+                              />
+                              All Members
+                            </label>
+                          </div>
+                        </div>
+
+                        {assigneeType === "single" && (
+                          <div className="space-y-1">
+                            <Label>Select Member</Label>
+                            <select
+                              className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm"
+                              value={form.assignee}
+                              onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                            >
+                              <option value="">Unassigned</option>
+                              {(members ?? []).map((m) => (
+                                <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {assigneeType === "multiple" && (
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted">Select Member List</Label>
+                            <div className="max-h-48 overflow-y-auto border border-card-border/80 rounded-lg p-2.5 space-y-1.5 bg-card/60">
+                              {members && members.length > 0 ? (
+                                members.map((m) => {
+                                  const isChecked = selectedMembers.includes(m.id);
+                                  return (
+                                    <label key={m.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/10 p-1.5 rounded transition-colors">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {
+                                          if (isChecked) {
+                                            setSelectedMembers(selectedMembers.filter(id => id !== m.id));
+                                          } else {
+                                            setSelectedMembers([...selectedMembers, m.id]);
+                                          }
+                                        }}
+                                        className="rounded border-card-border text-primary h-3.5 w-3.5"
+                                      />
+                                      <span>{m.first_name} {m.last_name} ({m.username})</span>
+                                    </label>
+                                  );
+                                })
+                              ) : (
+                                <p className="text-xs text-muted py-2 text-center">Loading members list...</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -275,6 +421,11 @@ export default function TasksPage() {
                       </div>
                     )}
                   </div>
+                ) : (
+                  <div className="p-4 border rounded-lg bg-card/50">
+                    <Label className="block mb-1">Assigned To</Label>
+                    <p className="text-sm font-semibold text-primary">Myself</p>
+                  </div>
                 )}
               </div>
 
@@ -303,91 +454,79 @@ export default function TasksPage() {
                   </div>
                 </div>
 
-                {/* Project Linkage Controls */}
-                {isLead && assignType === "project" && (
+                {isLead && assignType === "project" && selectedProjectDetail && (
                   <div className="p-4 border rounded-lg bg-card/50 space-y-3">
-                    <h4 className="text-sm font-medium">Project Linkage (Optional)</h4>
-                    <p className="text-xs text-muted">Completing this task will automatically progress the selected project hierarchy level.</p>
+                    <h4 className="text-sm font-medium mb-1 flex items-center gap-1.5"><Layers3 size={14} /> Project Phase Association</h4>
+                    <div>
+                      <Label className="text-xs text-muted">Phase</Label>
+                      <select
+                        className="w-full rounded-lg border border-card-border bg-card px-2.5 py-1.5 text-xs"
+                        value={form.linked_phase}
+                        onChange={(e) => setForm({ ...form, linked_phase: e.target.value, linked_sub_stage: "", linked_sub_level: "" })}
+                      >
+                        <option value="">No phase association</option>
+                        {(selectedProjectDetail.phases_detail ?? []).map((p: any) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <Label>Phase</Label>
+                    {form.linked_phase && (
+                      <div>
+                        <Label className="text-xs text-muted">Sub Stage</Label>
                         <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-                          value={form.linked_phase}
-                          onChange={(e) => setForm({ ...form, linked_phase: e.target.value, linked_sub_stage: "", linked_sub_level: "" })}
-                          disabled={!form.project || !selectedProjectDetail?.phases?.length}
-                        >
-                          <option value="">None</option>
-                          {(selectedProjectDetail?.phases ?? []).map((ph: any) => (
-                            <option key={ph.id} value={ph.id}>{ph.title}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="col-span-2">
-                        <Label>Sub Stage</Label>
-                        <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                          className="w-full rounded-lg border border-card-border bg-card px-2.5 py-1.5 text-xs"
                           value={form.linked_sub_stage}
                           onChange={(e) => setForm({ ...form, linked_sub_stage: e.target.value, linked_sub_level: "" })}
-                          disabled={!form.linked_phase}
                         >
-                          <option value="">None</option>
-                          {(selectedProjectDetail?.phases?.find((p: any) => p.id === Number(form.linked_phase))?.sub_stages ?? []).map((st: any) => (
-                            <option key={st.id} value={st.id}>{st.title}</option>
+                          <option value="">No sub stage association</option>
+                          {((selectedProjectDetail.phases_detail ?? []).find((p: any) => p.id === Number(form.linked_phase))?.substages_detail ?? []).map((s: any) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
                           ))}
                         </select>
                       </div>
+                    )}
 
-                      <div className="col-span-2">
-                        <Label>Sub Level</Label>
+                    {form.linked_sub_stage && (
+                      <div>
+                        <Label className="text-xs text-muted">Sub Level</Label>
                         <select
-                          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                          className="w-full rounded-lg border border-card-border bg-card px-2.5 py-1.5 text-xs"
                           value={form.linked_sub_level}
                           onChange={(e) => setForm({ ...form, linked_sub_level: e.target.value })}
-                          disabled={!form.linked_sub_stage}
                         >
-                          <option value="">None</option>
-                          {(selectedProjectDetail?.phases?.find((p: any) => p.id === Number(form.linked_phase))?.sub_stages?.find((s: any) => s.id === Number(form.linked_sub_stage))?.sub_levels ?? []).map((sl: any) => (
-                            <option key={sl.id} value={sl.id}>{sl.title}</option>
+                          <option value="">No sub level association</option>
+                          {((((selectedProjectDetail.phases_detail ?? []).find((p: any) => p.id === Number(form.linked_phase))?.substages_detail ?? []).find((s: any) => s.id === Number(form.linked_sub_stage))?.sublevels_detail ?? [])).map((l: any) => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
                           ))}
                         </select>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
                 <div>
                   <Label>Attachments</Label>
-                  <div className="relative mb-2">
+                  <div className="border border-dashed border-card-border rounded-lg p-6 text-center cursor-pointer hover:bg-muted/10 transition-colors" onClick={() => document.getElementById("task-create-file-upload")?.click()}>
                     <input
                       type="file"
                       multiple
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      id="task-create-file-upload"
+                      className="hidden"
                       onChange={(e) => {
-                        if (e.target.files) {
-                          setAttachments((prev) => [...prev, ...Array.from(e.target.files!)]);
-                        }
+                        if (e.target.files) setAttachments(Array.from(e.target.files));
                       }}
                     />
-                    <div className="w-full rounded-lg border border-dashed border-card-border bg-card px-3 py-4 text-sm flex flex-col items-center justify-center gap-2 text-muted hover:bg-card-border transition-colors">
-                      <UploadCloud size={24} />
-                      <span>Drag or click to attach files</span>
-                    </div>
+                    <UploadCloud className="mx-auto h-8 w-8 text-muted mb-2" />
+                    <p className="text-sm font-medium">Click to upload files</p>
+                    <p className="text-xs text-muted mt-1">Select files to upload for this task</p>
                   </div>
                   {attachments.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {attachments.map((file, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-muted/20 px-3 py-2 rounded border border-card-border text-xs">
-                          <span className="truncate max-w-[80%]">{file.name}</span>
-                          <button
-                            type="button"
-                            className="text-danger hover:text-danger/80 p-1"
-                            onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                          </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {attachments.map((f, i) => (
+                        <div key={i} className="text-xs bg-muted/20 border border-card-border rounded px-2 py-1 flex items-center gap-1.5">
+                          <Paperclip size={10} />
+                          <span className="truncate max-w-[120px]">{f.name}</span>
                         </div>
                       ))}
                     </div>
@@ -398,17 +537,18 @@ export default function TasksPage() {
           </Card>
         )}
 
+        {/* Tab: Kanban Board */}
         {tab === "kanban" && (
           <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 overflow-x-auto">
             {STATUSES.map((status) => (
               <div key={status} className="min-w-[200px]">
                 <p className="text-xs font-semibold uppercase text-muted mb-2">{status.replace("_", " ")}</p>
                 <div className="space-y-2">
-                  {(kanban?.[status] ?? []).map((task) => (
+                  {(kanban?.[status] ?? []).map((task: any) => (
                     <Card key={task.id} className="p-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedTask(task)}>
                       <p className="text-sm font-medium">{task.title}</p>
                       {task.project_detail && <p className="text-[10px] text-primary mt-1">{task.project_detail.title}</p>}
-                      {isLead && status !== "done" && (
+                      {canUserModifyTask(task) && status !== "done" && (
                         <select
                           className="mt-2 w-full text-xs rounded border border-card-border bg-card px-1 py-0.5"
                           value={status}
@@ -426,14 +566,15 @@ export default function TasksPage() {
           </div>
         )}
 
+        {/* Tab: Task List */}
         {tab === "list" && (
           isLoading ? (
-            <p className="text-muted">Loading tasks...</p>
+            <p className="text-muted text-sm">Loading tasks...</p>
           ) : !tasks?.length ? (
             <Card><p className="text-muted text-center py-8">No tasks assigned yet.</p></Card>
           ) : (
             <div className="space-y-3">
-              {tasks.map((task) => (
+              {tasks.map((task: any) => (
                 <Card key={task.id} className="flex items-start justify-between gap-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedTask(task)}>
                   <div>
                     <h3 className="font-medium">{task.title}</h3>
@@ -448,9 +589,9 @@ export default function TasksPage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    {isLead && task.status !== "done" ? (
+                    {canUserModifyTask(task) && task.status !== "done" ? (
                       <select
-                        className={cn("text-xs px-2 py-0.5 rounded-full capitalize border-none outline-none appearance-none cursor-pointer", statusColors[task.status] || statusColors.todo)}
+                        className={cn("text-xs px-2 py-0.5 rounded-full capitalize border-none outline-none appearance-none cursor-pointer font-medium", statusColors[task.status] || statusColors.todo)}
                         value={task.status}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => updateStatus.mutate({ id: task.id, status: e.target.value })}
@@ -458,12 +599,12 @@ export default function TasksPage() {
                         {STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                       </select>
                     ) : (
-                      <span className={cn("text-xs px-2 py-0.5 rounded-full capitalize", statusColors[task.status] || statusColors.todo)}>
+                      <span className={cn("text-xs px-2 py-0.5 rounded-full capitalize font-medium", statusColors[task.status] || statusColors.todo)}>
                         {task.status.replace("_", " ")}
                       </span>
                     )}
-                    <span className="text-xs capitalize">{task.priority}</span>
-                    {task.due_date && <span className="text-xs text-muted">Due {task.due_date}</span>}
+                    <span className="text-xs capitalize font-medium">{task.priority}</span>
+                    {task.due_date && <span className="text-xs text-muted font-mono">{task.due_date}</span>}
                   </div>
                 </Card>
               ))}
@@ -536,7 +677,7 @@ export default function TasksPage() {
               )}
 
               {/* Upload new attachment (Assignee or Lead) */}
-              {(isLead || selectedTask.assignee === user?.id) && selectedTask.status !== "done" && (
+              {canUserModifyTask(selectedTask) && selectedTask.status !== "done" && (
                 <div className="pt-2">
                   <label className="text-xs font-semibold text-muted mb-1 block">Add Delivery / Review Attachments</label>
                   <div className="flex items-center gap-2">
@@ -565,7 +706,6 @@ export default function TasksPage() {
                             setTaskUploads([]);
                             qc.invalidateQueries({ queryKey: ["my-tasks"] });
                             qc.invalidateQueries({ queryKey: ["kanban"] });
-                            // fetch updated task... (a refresh will show it)
                             const t = await tasksApi.myTasks().then(res => res.find((x: any) => x.id === selectedTask.id));
                             if (t) setSelectedTask(t);
                           } catch (e) {
@@ -587,7 +727,7 @@ export default function TasksPage() {
                 </div>
               )}
 
-              {(isLead || selectedTask.assignee === user?.id) && (
+              {canUserModifyTask(selectedTask) && (
                 <div className="pt-4 border-t border-card-border space-y-3">
                   <div className="flex flex-col gap-2">
                     <label className="text-xs font-semibold text-muted">Add Note (Optional)</label>
@@ -602,29 +742,36 @@ export default function TasksPage() {
                   <div className="flex flex-wrap gap-2 items-center pt-2">
                     <span className="text-xs font-semibold text-muted w-full block mb-1">Task Actions</span>
 
-                    {!(isLead || selectedTask.assigned_by === user?.id) && selectedTask.status === "todo" && (
-                      <Button size="sm" onClick={async () => {
-                        try { if (statusNote.trim()) await tasksApi.addComment(selectedTask.id, statusNote); } catch (e) { console.error(e); }
-                        updateStatus.mutate({ id: selectedTask.id, status: "in_progress" });
-                        setSelectedTask({ ...selectedTask, status: "in_progress" });
-                        setStatusNote("");
-                      }}>
+                    {selectedTask.status === "todo" && (
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          try { if (statusNote.trim()) await tasksApi.addComment(selectedTask.id, statusNote); } catch (e) { console.error(e); }
+                          updateStatus.mutate({ id: selectedTask.id, status: "in_progress" });
+                          setSelectedTask({ ...selectedTask, status: "in_progress" });
+                          setStatusNote("");
+                        }}
+                      >
                         Take Task
                       </Button>
                     )}
 
-                    {!(isLead || selectedTask.assigned_by === user?.id) && selectedTask.status === "in_progress" && (
-                      <Button size="sm" className="bg-warning text-white hover:bg-yellow-600 border-none" onClick={async () => {
-                        try { if (statusNote.trim()) await tasksApi.addComment(selectedTask.id, statusNote); } catch (e) { console.error(e); }
-                        updateStatus.mutate({ id: selectedTask.id, status: "review" });
-                        setSelectedTask({ ...selectedTask, status: "review" });
-                        setStatusNote("");
-                      }}>
+                    {selectedTask.status === "in_progress" && (
+                      <Button
+                        size="sm"
+                        className="bg-warning text-white hover:bg-yellow-600 border-none"
+                        onClick={async () => {
+                          try { if (statusNote.trim()) await tasksApi.addComment(selectedTask.id, statusNote); } catch (e) { console.error(e); }
+                          updateStatus.mutate({ id: selectedTask.id, status: "review" });
+                          setSelectedTask({ ...selectedTask, status: "review" });
+                          setStatusNote("");
+                        }}
+                      >
                         Submit for Review
                       </Button>
                     )}
 
-                    {!(isLead || selectedTask.assigned_by === user?.id) && selectedTask.status === "review" && (
+                    {selectedTask.status === "review" && !user?.role?.is_leadership && !user?.is_superuser && selectedTask.assigned_by !== user?.id && (
                       <span className="text-xs text-warning bg-warning/10 px-3 py-1.5 rounded-lg border border-warning/20">Waiting for leader approval...</span>
                     )}
 
@@ -652,7 +799,7 @@ export default function TasksPage() {
                         )}
 
                         <select
-                          className="max-w-[150px] rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm ml-auto"
+                          className="max-w-[150px] rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm ml-auto font-medium"
                           value={selectedTask.status}
                           onChange={async (e) => {
                             try { if (statusNote.trim()) await tasksApi.addComment(selectedTask.id, statusNote); } catch (e) { console.error(e); }

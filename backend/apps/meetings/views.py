@@ -19,7 +19,7 @@ class MeetingViewSet(RBACMixin, viewsets.ModelViewSet):
     )
     serializer_class = MeetingSerializer
     search_fields = ("title", "agenda")
-    filterset_fields = ("department", "organizer")
+    filterset_fields = ("department", "team", "organizer")
     ordering_fields = ("start_time",)
 
     @action(detail=True, methods=["post"])

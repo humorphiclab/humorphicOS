@@ -37,18 +37,38 @@ class TaskSerializer(serializers.ModelSerializer):
     subtasks = SubtaskSerializer(many=True, read_only=True)
     comments = TaskCommentSerializer(many=True, read_only=True)
     attachments = TaskAttachmentSerializer(many=True, read_only=True)
+    assigned_team_detail = serializers.SerializerMethodField()
+    assigned_department_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = (
             "id", "title", "description", "project", "project_detail",
             "linked_phase", "linked_sub_stage", "linked_sub_level",
-            "assignee", "assignee_detail", "assigned_department", "assigned_team",
-            "assigned_by", "assigned_by_detail",
+            "assignee", "assignee_detail", "assigned_department", "assigned_department_detail",
+            "assigned_team", "assigned_team_detail", "assigned_by", "assigned_by_detail",
             "priority", "status", "due_date", "checklist", "hours_logged",
             "is_recurring", "subtasks", "comments", "attachments", "created_at", "updated_at", "completed_at",
         )
         read_only_fields = ("assigned_by", "created_at", "updated_at", "completed_at")
+
+    def get_assigned_team_detail(self, obj):
+        if obj.assigned_team:
+            return {
+                "id": obj.assigned_team.id,
+                "name": obj.assigned_team.name,
+                "lead": obj.assigned_team.lead.id if obj.assigned_team.lead else None
+            }
+        return None
+
+    def get_assigned_department_detail(self, obj):
+        if obj.assigned_department:
+            return {
+                "id": obj.assigned_department.id,
+                "name": obj.assigned_department.name,
+                "head": obj.assigned_department.head.id if obj.assigned_department.head else None
+            }
+        return None
 
     def validate(self, data):
         user = self.context["request"].user
@@ -56,27 +76,42 @@ class TaskSerializer(serializers.ModelSerializer):
         assigned_team = data.get("assigned_team")
         assigned_department = data.get("assigned_department")
 
-        if user.is_superuser or getattr(user.role, "slug", "") in ["super_admin", "president", "vice_president"]:
+        if user.is_superuser or getattr(user.role, "slug", "") in ["founder", "super_admin", "president", "vice_president", "faculty"]:
             return data
 
-        if getattr(user.role, "slug", "") == "team_lead":
+        is_dept_head = user.headed_departments.exists()
+        is_team_lead = getattr(user.role, "slug", "") == "team_lead" or user.led_teams.exists()
+
+        if is_dept_head:
+            if assigned_department:
+                if not user.headed_departments.filter(id=assigned_department.id).exists():
+                    raise serializers.ValidationError({"assigned_department": "You can only assign tasks to a department you head."})
+            if assigned_team:
+                is_valid_team = (
+                    user.led_teams.filter(id=assigned_team.id).exists() or
+                    (assigned_team.project and assigned_team.project.department and assigned_team.project.department.head == user)
+                )
+                if not is_valid_team:
+                    raise serializers.ValidationError({"assigned_team": "You can only assign tasks to teams in your department or teams you lead."})
+            if assignee:
+                is_valid_assignee = (
+                    assignee == user or
+                    assignee.departments.filter(head=user).exists() or
+                    assignee.teams.filter(lead=user).exists()
+                )
+                if not is_valid_assignee:
+                    raise serializers.ValidationError({"assignee": "You can only assign tasks to members of your department or team."})
+            return data
+
+        elif is_team_lead:
             if assigned_department:
                 raise serializers.ValidationError({"assigned_department": "Team Leads cannot assign tasks to a department."})
             if assigned_team:
-                if not user.managed_teams.filter(id=assigned_team.id).exists():
+                if not user.led_teams.filter(id=assigned_team.id).exists():
                     raise serializers.ValidationError({"assigned_team": "You can only assign tasks to a team you lead."})
             if assignee:
                 if assignee != user and not assignee.teams.filter(lead=user).exists():
                     raise serializers.ValidationError({"assignee": "You can only assign tasks to members of your team."})
-            return data
-
-        if getattr(user.role, "slug", "") == "department_head":
-            if assigned_department:
-                if not user.managed_departments.filter(id=assigned_department.id).exists():
-                    raise serializers.ValidationError({"assigned_department": "You can only assign tasks to a department you head."})
-            if assignee:
-                if assignee != user and not assignee.departments.filter(head=user).exists():
-                    raise serializers.ValidationError({"assignee": "You can only assign tasks to members of your department."})
             return data
 
         # General members

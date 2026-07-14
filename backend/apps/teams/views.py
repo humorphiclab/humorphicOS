@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.rbac import RBACMixin
+from apps.accounts.permissions import IsVicePresidentOrAbove
 
 from .models import Team
 from .serializers import TeamSerializer
@@ -11,6 +12,7 @@ from .serializers import TeamSerializer
 
 class TeamViewSet(RBACMixin, viewsets.ModelViewSet):
     rbac_resource = "teams"
+    permission_classes = [IsAuthenticated, IsVicePresidentOrAbove]
     queryset = Team.objects.select_related("project", "lead").prefetch_related("members")
     serializer_class = TeamSerializer
     search_fields = ("name", "description")

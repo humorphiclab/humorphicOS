@@ -39,18 +39,24 @@ def meeting_post_save(sender, instance, created, **kwargs):
     # Schedule 15-minute reminder (medium priority)
     eta_15 = instance.start_time - timedelta(minutes=15)
     if eta_15 > timezone.now():
-        send_meeting_reminder.apply_async(
-            args=[instance.id, "medium", "15 minutes"],
-            eta=eta_15
-        )
+        try:
+            send_meeting_reminder.apply_async(
+                args=[instance.id, "medium", "15 minutes"],
+                eta=eta_15
+            )
+        except Exception as e:
+            logger.warning(f"Could not queue 15m Celery reminder: {e}. Periodic task backup will handle it.")
 
     # Schedule 5-minute reminder (urgent priority)
     eta_5 = instance.start_time - timedelta(minutes=5)
     if eta_5 > timezone.now():
-        send_meeting_reminder.apply_async(
-            args=[instance.id, "urgent", "5 minutes"],
-            eta=eta_5
-        )
+        try:
+            send_meeting_reminder.apply_async(
+                args=[instance.id, "urgent", "5 minutes"],
+                eta=eta_5
+            )
+        except Exception as e:
+            logger.warning(f"Could not queue 5m Celery reminder: {e}. Periodic task backup will handle it.")
 
     if not created:
         # For updates, notify all current participants (excluding organizer)

@@ -5,13 +5,9 @@ from .models import Notification, NotificationPreference
 
 logger = logging.getLogger(__name__)
 
-def send_html_email_to_user(user, title, message, link="", priority="normal"):
-    """
-    Sends a premium, responsive dark-theme cyber-aesthetic HTML email to a user.
-    """
-    if not user or not user.email:
-        return
+import threading
 
+def _send_email_thread(user, title, message, link, priority):
     try:
         # Build full absolute frontend URL if link is relative
         full_link = link
@@ -62,7 +58,7 @@ def send_html_email_to_user(user, title, message, link="", priority="normal"):
                   <!-- Header Logo Area -->
                   <tr>
                     <td style="padding: 32px 40px; text-align: left; background-color: #13192a; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                       <table border="0" cellpadding="0" cellspacing="0" width="100%">
                         <tr>
                           <td>
                             <span style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; background: linear-gradient(90deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">HumorphicOS</span>
@@ -74,7 +70,7 @@ def send_html_email_to_user(user, title, message, link="", priority="normal"):
                       </table>
                     </td>
                   </tr>
-
+ 
                   <!-- Main Content Area -->
                   <tr>
                     <td style="padding: 40px 40px 36px 40px;">
@@ -85,14 +81,14 @@ def send_html_email_to_user(user, title, message, link="", priority="normal"):
                       {button_html}
                     </td>
                   </tr>
-
+ 
                   <!-- Divider -->
                   <tr>
                     <td style="padding: 0 40px;">
                       <div style="border-top: 1px solid rgba(255, 255, 255, 0.06); height: 1px; line-height: 1px;"></div>
                     </td>
                   </tr>
-
+ 
                   <!-- Footer Area -->
                   <tr>
                     <td style="padding: 32px 40px; background-color: #0f1322; text-align: left; border-top: 1px solid rgba(255, 255, 255, 0.03);">
@@ -111,7 +107,7 @@ def send_html_email_to_user(user, title, message, link="", priority="normal"):
                       </table>
                     </td>
                   </tr>
-
+ 
                 </table>
               </td>
             </tr>
@@ -133,6 +129,21 @@ def send_html_email_to_user(user, title, message, link="", priority="normal"):
         msg.send(fail_silently=False)
     except Exception as e:
         logger.error(f"Failed to send email to {user.email}: {e}")
+
+def send_html_email_to_user(user, title, message, link="", priority="normal"):
+    """
+    Sends a premium, responsive dark-theme cyber-aesthetic HTML email to a user.
+    Uses threading to prevent blocking the request thread.
+    """
+    if not user or not user.email:
+        return
+
+    thread = threading.Thread(
+        target=_send_email_thread,
+        args=(user, title, message, link, priority),
+        daemon=True
+    )
+    thread.start()
 
 
 def send_notification_to_user(user, pref_key, title, message, link="", priority="normal", context=None):

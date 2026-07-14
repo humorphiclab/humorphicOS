@@ -191,3 +191,41 @@ class SubLevel(models.Model):
         project = self.sub_stage.phase.project
         super().delete(*args, **kwargs)
         project.update_progress()
+
+
+class ProjectJoinRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="join_requests"
+    )
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.CASCADE, null=True, blank=True, related_name="join_requests"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_join_requests"
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_project_requests",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ("project", "user", "team")
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.project.title} ({self.status})"
+

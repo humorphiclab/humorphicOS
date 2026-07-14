@@ -4,7 +4,7 @@ from ..accounts.serializers import UserListSerializer
 from ..departments.serializers import DepartmentSerializer
 from ..teams.serializers import TeamSerializer
 
-from .models import Project, ProjectPhase, SubStage, SubLevel
+from .models import Project, ProjectPhase, SubStage, SubLevel, ProjectJoinRequest
 
 
 class LinkedTaskSummarySerializer(serializers.Serializer):
@@ -135,5 +135,32 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
                 user_ids.add(tm.id)
                 
         return list(user_ids)
+
+
+class ProjectJoinRequestSerializer(serializers.ModelSerializer):
+    user_detail = UserListSerializer(source="user", read_only=True)
+    project_detail = ProjectListSerializer(source="project", read_only=True)
+    reviewed_by_detail = UserListSerializer(source="reviewed_by", read_only=True)
+    team_detail = TeamSerializer(source="team", read_only=True)
+
+    class Meta:
+        model = ProjectJoinRequest
+        fields = (
+            "id",
+            "project",
+            "project_detail",
+            "team",
+            "team_detail",
+            "user",
+            "user_detail",
+            "status",
+            "created_at",
+            "updated_at",
+            "reviewed_by",
+            "reviewed_by_detail",
+            "reviewed_at",
+        )
+        read_only_fields = ("status", "user", "reviewed_by", "reviewed_at")
+
 
 

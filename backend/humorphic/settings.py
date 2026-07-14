@@ -96,6 +96,11 @@ DATABASES = {
 
 AUTH_USER_MODEL = "accounts.User"
 
+AUTHENTICATION_BACKENDS = [
+    "apps.accounts.backends.RBACAuthBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
@@ -162,6 +167,10 @@ CELERY_TIMEZONE = TIME_ZONE
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
+    "meeting-reminders": {
+        "task": "apps.meetings.tasks.check_and_send_meeting_reminders",
+        "schedule": 60.0,
+    },
     "daily-update-reminder": {
         "task": "apps.reports.tasks.send_daily_reminder",
         "schedule": crontab(hour=18, minute=0),
@@ -178,6 +187,7 @@ CELERY_BEAT_SCHEDULE = {
 
 GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")
 GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")
+GOOGLE_CALENDAR_REFRESH_TOKEN = env("GOOGLE_CALENDAR_REFRESH_TOKEN", default="")
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 WHATSAPP_API_URL = env("WHATSAPP_API_URL", default="")

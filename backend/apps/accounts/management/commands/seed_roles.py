@@ -60,10 +60,18 @@ class Command(BaseCommand):
                 resources = MEMBER_RESOURCES
                 actions = MEMBER_ACTIONS
 
+            perms_set = set()
+            for res in resources:
+                for act in actions:
+                    perms_set.add((res, act))
+
+            if role.slug in ("mentor", "member", "guest"):
+                perms_set.add(("departments", "read"))
+                perms_set.add(("teams", "read"))
+
             perms = [
                 Permission(role=role, resource=res, action=act)
-                for res in resources
-                for act in actions
+                for res, act in perms_set
             ]
             Permission.objects.bulk_create(perms, ignore_conflicts=True)
 

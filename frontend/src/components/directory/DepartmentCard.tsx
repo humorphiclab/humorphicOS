@@ -1,6 +1,8 @@
 import React from "react";
 import Link from "next/link";
 import { Users, FolderGit2 } from "lucide-react";
+import { getImageUrl } from "@/lib/api";
+
 
 interface User {
   id: number;
@@ -41,7 +43,7 @@ export function DepartmentCard({ department }: DepartmentCardProps) {
         <div className="flex items-center gap-3 mb-6">
           <div className="h-10 w-10 rounded-full overflow-hidden bg-white/10 flex items-center justify-center">
             {department.head_detail.avatar ? (
-              <img src={department.head_detail.avatar} alt={department.head_detail.full_name} className="h-full w-full object-cover" />
+              <img src={getImageUrl(department.head_detail.avatar) || undefined} alt={department.head_detail.full_name} className="h-full w-full object-cover" />
             ) : (
               <span className="text-sm font-medium text-white">
                 {department.head_detail.full_name.charAt(0)}

@@ -27,7 +27,13 @@ export default function LoginPage() {
       const { tokens, user } = await loginFn();
       setStoredTokens(tokens);
       setStoredUser(user as Parameters<typeof setStoredUser>[0]);
-      router.push("/dashboard");
+      
+      const u = user as any;
+      if (u && (!u.enrollment_number || !u.branch || !u.batch || !u.phone || !u.college)) {
+        router.push("/register");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

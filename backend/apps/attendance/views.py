@@ -39,6 +39,11 @@ class AttendanceRecordViewSet(RBACMixin, viewsets.ModelViewSet):
             return qs
         return qs.filter(user=user)
 
+    def paginate_queryset(self, queryset):
+        if self.request.query_params.get("no_pagination") == "true":
+            return None
+        return super().paginate_queryset(queryset)
+
     @action(detail=False, methods=["post"])
     def mark(self, request):
         today = timezone.now().date()

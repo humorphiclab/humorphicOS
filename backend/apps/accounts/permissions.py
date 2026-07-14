@@ -57,3 +57,22 @@ class CanManageLlm(BasePermission):
         if not request.user.role:
             return False
         return request.user.role.priority >= 70
+
+
+class IsVicePresidentOrAbove(BasePermission):
+    """
+    Allow write access only for Vice President and above (priority >= 80).
+    Read access is allowed for all authenticated users.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        # Always allow safe (read) methods
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return True
+        if request.user.is_superuser:
+            return True
+        if not request.user.role:
+            return False
+        return request.user.role.priority >= 80

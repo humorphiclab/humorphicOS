@@ -27,10 +27,34 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
     filterset_fields = ("status", "priority", "project", "assignee")
 
     def create(self, request, *args, **kwargs):
+        selected_members = request.data.get("selected_members")
         assign_to_all = request.data.get("assignee") == "all"
+
+        if isinstance(selected_members, list) and len(selected_members) > 0:
+            user = request.user
+            is_lead = user.is_superuser or getattr(user.role, "is_leadership", False) or user.led_teams.exists() or user.headed_departments.exists()
+            if not is_lead:
+                return Response({"detail": "You do not have permission to assign tasks to selected members."}, status=403)
+
+            created_tasks = []
+            data = request.data.copy()
+            data.pop("selected_members", None)
+            
+            for uid in selected_members:
+                data["assignee"] = uid
+                serializer = self.get_serializer(data=data)
+                serializer.is_valid(raise_exception=True)
+                task = serializer.save()
+                created_tasks.append(task)
+                
+            return Response(
+                {"detail": f"Successfully created tasks for {len(created_tasks)} members."},
+                status=201
+            )
+
         if assign_to_all:
             user = request.user
-            is_lead = user.is_superuser or getattr(user.role, "is_leadership", False) or getattr(user.role, "slug", "") in ["team_lead", "department_head"]
+            is_lead = user.is_superuser or getattr(user.role, "is_leadership", False) or user.led_teams.exists() or user.headed_departments.exists()
             if not is_lead:
                 return Response({"detail": "You do not have permission to assign tasks to all members."}, status=403)
 
@@ -52,6 +76,35 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
             )
             
         return super().create(request, *args, **kwargs)
+
+    def check_task_modification_permission(self, request, task):
+        user = request.user
+        if user.is_superuser or getattr(user.role, "slug", "") in ["founder", "super_admin", "president", "vice_president", "faculty"]:
+            return True
+
+        if task.assigned_department:
+            if task.assigned_department.head == user or task.assignee == user or task.assigned_by == user:
+                return True
+            return False
+
+        if task.assigned_team:
+            if task.assigned_team.lead == user or task.assignee == user or task.assigned_by == user:
+                return True
+            return False
+
+        if task.assignee:
+            if task.assignee == user or task.assigned_by == user:
+                return True
+            return False
+
+        return True
+
+    def update(self, request, *args, **kwargs):
+        task = self.get_object()
+        if not self.check_task_modification_permission(request, task):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only the lead of the assigned team/department or the assignee can manage this task.")
+        return super().update(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"])
     def comments(self, request, pk=None):
@@ -79,6 +132,8 @@ class TaskViewSet(RBACMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"])
     def status(self, request, pk=None):
         task = self.get_object()
+        if not self.check_task_modification_permission(request, task):
+            return Response({"detail": "Only the lead of the assigned team/department or the assignee can manage this task."}, status=403)
         new_status = request.data.get("status")
         if new_status not in dict(Task.Status.choices):
             return Response({"detail": "Invalid status."}, status=400)

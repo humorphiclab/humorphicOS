@@ -18,11 +18,16 @@ class Meeting(models.Model):
     department = models.ForeignKey(
         "departments.Department", on_delete=models.SET_NULL, null=True, blank=True
     )
+    team = models.ForeignKey(
+        "teams.Team", on_delete=models.SET_NULL, null=True, blank=True
+    )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     minutes = models.TextField(blank=True)
     action_items = models.JSONField(default=list, blank=True)
     ai_summary = models.TextField(blank=True)
+    reminder_15m_sent = models.BooleanField(default=False)
+    reminder_5m_sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

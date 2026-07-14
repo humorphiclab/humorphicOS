@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bot, Upload, Plus, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
-import { authApi, setStoredTokens, setStoredUser } from "@/lib/api";
+import { authApi, setStoredTokens, setStoredUser, getStoredUser, getStoredTokens } from "@/lib/api";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const BRANCHES = ["CS AI", "CS", "Mechanical", "Civil", "Electrical"];
@@ -56,6 +56,26 @@ export default function RegisterPage() {
   }, [form.start_year, form.end_year]);
 
   const up = (patch: Partial<typeof form>) => setForm(p => ({ ...p, ...patch }));
+
+  useEffect(() => {
+    const user = getStoredUser();
+    const tokens = getStoredTokens();
+    if (user && tokens) {
+      const isIncomplete = !user.enrollment_number || !user.branch || !user.batch || !user.phone || !user.college;
+      if (isIncomplete) {
+        setGMode(true);
+        up({
+          email: user.email || "",
+          first_name: user.first_name || "",
+          last_name: user.last_name || "",
+          username: user.username || "",
+          password: "",
+        });
+      } else {
+        router.push("/dashboard");
+      }
+    }
+  }, [router]);
 
   const onStartYear = (v: string) => {
     const n = parseInt(v, 10);

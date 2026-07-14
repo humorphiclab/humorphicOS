@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, CheckSquare, FolderKanban, Calendar, Users, FileText,
@@ -147,10 +147,13 @@ export function Sidebar() {
 
       <div className="p-3 border-t border-card-border">
         {mounted && user && (
-          <div className="mb-2 px-2">
-            <p className="text-sm font-medium truncate">{user.first_name} {user.last_name}</p>
-            <p className="text-xs text-muted truncate">{user.is_superuser ? "Superuser" : (user.role?.name || "Member")}</p>
-          </div>
+          <Link
+            href={`/members/${user.id}`}
+            className="block mb-2 px-2 py-1 rounded hover:bg-card-border/30 transition-colors"
+          >
+            <p className="text-sm font-medium truncate hover:text-primary transition-colors">{user.first_name} {user.last_name}</p>
+            <p className="text-xs text-muted truncate">{user.role?.name || (user.is_superuser ? "Superuser" : "Member")}</p>
+          </Link>
         )}
         <button
           onClick={logout}
@@ -164,17 +167,56 @@ export function Sidebar() {
   );
 }
 
+function SearchBar() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (pathname === "/search") {
+      setQuery(searchParams.get("q") || "");
+    } else {
+      setQuery("");
+    }
+  }, [pathname, searchParams]);
+
+  const handleChange = (val: string) => {
+    setQuery(val);
+    if (pathname !== "/search") {
+      router.push(`/search?q=${encodeURIComponent(val)}`);
+    } else {
+      const params = new URLSearchParams(searchParams.toString());
+      if (val) {
+        params.set("q", val);
+      } else {
+        params.delete("q");
+      }
+      router.replace(`/search?${params.toString()}`);
+    }
+  };
+
+  return (
+    <div className="relative flex-1 max-w-md">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => handleChange(e.target.value)}
+        placeholder="Search members, tasks, projects..."
+        className="w-full rounded-lg border border-card-border bg-card pl-10 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted hover:border-primary/50 focus:border-primary focus:outline-none transition-colors"
+      />
+    </div>
+  );
+}
+
 export function TopBar({ title }: { title: string }) {
   return (
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-card-border bg-background/80 backdrop-blur-sm px-6 py-3">
       <h2 className="text-lg font-semibold shrink-0">{title}</h2>
-      <Link
-        href="/search"
-        className="flex flex-1 items-center gap-2 rounded-lg border border-card-border bg-card px-3 py-1.5 text-sm text-muted hover:border-primary/50 transition-colors max-w-md"
-      >
-        <Search className="h-4 w-4" />
-        Search members, tasks, projects...
-      </Link>
+      <Suspense fallback={<div className="relative flex-1 max-w-md h-9 bg-card rounded-lg" />}>
+        <SearchBar />
+      </Suspense>
       <Link href="/notifications" className="relative rounded-lg p-2 hover:bg-card-border/30 transition-colors">
         <Bell className="h-5 w-5 text-muted" />
       </Link>

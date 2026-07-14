@@ -115,7 +115,7 @@ class User(AbstractUser):
         return self.get_full_name()
 
     def save(self, *args, **kwargs):
-        if self.role and self.role.slug in ["founder", "super_admin", "president"]:
+        if self.role and self.role.slug in ["founder", "super_admin", "president", "vice_president"]:
             dup_query = User.objects.filter(role=self.role).exclude(pk=self.pk)
             if dup_query.filter(is_active=True).exists():
                 raise ValidationError(
@@ -123,8 +123,13 @@ class User(AbstractUser):
                 )
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        if self.role and self.role.slug == "founder":
+            raise ValidationError("A founder cannot be deleted by anyone, including super admins and superusers.")
+        super().delete(*args, **kwargs)
+
     def has_permission(self, resource: str, action: str) -> bool:
-        if self.is_superuser:
+        if self.is_superuser or (self.role and self.role.slug == "founder"):
             return True
         if not self.role:
             return False

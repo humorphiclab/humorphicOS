@@ -197,44 +197,37 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
         if not role_to_assign:
             raise serializers.ValidationError({"role": "Role is required."})
         
-        if creator.is_superuser:
-            pass  # superuser is allowed to create any role
-        else:
-            creator_role = creator.role
-            if not creator_role:
-                raise serializers.ValidationError("You do not have a role assigned and cannot create users.")
+        # Enforce that only founder, super_admin, and president (or superuser) can create users
+        if not creator.is_superuser:
+            if not creator.role or creator.role.slug not in ["founder", "super_admin", "president"]:
+                raise serializers.ValidationError("Only Founder, Super Admin, or President can create users.")
             
-            creator_slug = creator_role.slug
-            creator_priority = creator_role.priority
+            creator_slug = creator.role.slug
+            creator_priority = creator.role.priority
 
-            # Low-level roles (priority < 70) cannot create users at all
-            if creator_priority < 70:
-                raise serializers.ValidationError("You do not have permission to create users.")
-
-            # Founder can assign any role
             if creator_slug == "founder":
-                pass
-            # President can assign founder plus all roles below founder (priority < 110)
+                if role_to_assign.priority >= 110:
+                    raise serializers.ValidationError(
+                        {"role": "You can only create users with a role below yours."}
+                    )
+            elif creator_slug == "super_admin":
+                if role_to_assign.priority >= 100:
+                    raise serializers.ValidationError(
+                        {"role": "You can only create users with a role below yours."}
+                    )
             elif creator_slug == "president":
-                if role_to_assign.slug == "founder" or role_to_assign.priority < 110:
+                # President can create Founder (110) or roles below President (< 90)
+                if role_to_assign.slug == "founder":
+                    pass
+                elif role_to_assign.priority < 90:
                     pass
                 else:
                     raise serializers.ValidationError(
-                        {"role": "A President can only assign a Founder role plus all roles below it."}
-                    )
-            # Other roles (super_admin, vice_president, faculty) can create below roles
-            else:
-                if role_to_assign.slug == "founder":
-                    raise serializers.ValidationError(
-                        {"role": "Only the President can assign the Founder role."}
-                    )
-                if role_to_assign.priority >= creator_priority:
-                    raise serializers.ValidationError(
-                        {"role": f"You can only create users with a role below yours (priority < {creator_priority})."}
+                        {"role": "A President can only create a Founder or roles below President."}
                     )
 
-        # Check unique constraints on super admin, founder, and president roles
-        if role_to_assign and role_to_assign.slug in ["super_admin", "founder", "president"]:
+        # Check unique constraints on super_admin, founder, president, and vice_president roles
+        if role_to_assign and role_to_assign.slug in ["founder", "super_admin", "president", "vice_president"]:
             existing_user = User.objects.filter(role__slug=role_to_assign.slug, is_active=True).exists()
             if existing_user:
                 raise serializers.ValidationError(
