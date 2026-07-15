@@ -4,8 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsLeadership
-from apps.accounts.rbac import RBACMixin
+from ...apps.accounts.permissions import IsLeadership
+from ...apps.accounts.rbac import RBACMixin
 
 from .models import Meeting, MeetingAttendance
 from .serializers import MeetingAttendanceSerializer, MeetingSerializer
