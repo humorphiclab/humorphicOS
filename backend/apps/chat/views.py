@@ -75,9 +75,9 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
         # If user is admin/superuser, they can chat with everyone in the club
         is_admin = user.is_superuser or (user.role and user.role.slug in ("super_admin", "president", "vice_president", "faculty"))
         if is_admin:
-            from ...apps.accounts.models import User as ClubUser
+            from apps.accounts.models import User as ClubUser
             users = ClubUser.objects.filter(is_active=True).exclude(id=user.id).select_related("role")
-            from ...apps.accounts.serializers import UserListSerializer
+            from apps.accounts.serializers import UserListSerializer
             return Response(UserListSerializer(users, many=True).data)
             
         # Otherwise, they can chat with:
@@ -93,7 +93,7 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
             friend_ids.add(other.id)
             
         # 2. All admins / superusers
-        from ...apps.accounts.models import User as ClubUser
+        from apps.accounts.models import User as ClubUser
         admins = ClubUser.objects.filter(
             Q(is_superuser=True) | Q(role__slug__in=("super_admin", "president", "vice_president", "faculty")),
             is_active=True
@@ -105,7 +105,7 @@ class DirectMessageViewSet(RBACMixin, viewsets.ModelViewSet):
         allowed_ids = friend_ids.union(admin_ids)
         allowed_users = ClubUser.objects.filter(id__in=allowed_ids, is_active=True).select_related("role")
         
-        from ...apps.accounts.serializers import UserListSerializer
+        from apps.accounts.serializers import UserListSerializer
         return Response(UserListSerializer(allowed_users, many=True).data)
 
 
@@ -151,7 +151,7 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
         serializer.save(sender=self.request.user)
         
         # Notify receiver
-        from ...apps.notifications.services import send_notification_to_user
+        from apps.notifications.services import send_notification_to_user
         receiver = serializer.instance.receiver
         send_notification_to_user(
             user=receiver,
@@ -175,7 +175,7 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
         if action_choice == "accept":
             friend_request.status = FriendRequest.Status.ACCEPTED
             # Notify sender
-            from ...apps.notifications.services import send_notification_to_user
+            from apps.notifications.services import send_notification_to_user
             send_notification_to_user(
                 user=friend_request.sender,
                 pref_key="messages",
@@ -203,6 +203,6 @@ class FriendRequestViewSet(RBACMixin, viewsets.ModelViewSet):
             other = req.receiver if req.sender == user else req.sender
             friends.append(other)
             
-        from ...apps.accounts.serializers import UserListSerializer
+        from apps.accounts.serializers import UserListSerializer
         return Response(UserListSerializer(friends, many=True).data)
 
