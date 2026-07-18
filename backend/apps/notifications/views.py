@@ -101,3 +101,68 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({"detail": f"Successfully broadcasted to {len(users)} users."})
 
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def send_test_email(self, request):
+        # Only allow Founder, Super Admin, President, or Django Superuser
+        user = request.user
+        is_authorized = (
+            user.is_superuser or 
+            (user.role and user.role.slug in ["founder", "super_admin", "president"])
+        )
+        if not is_authorized:
+            return Response(
+                {"detail": "You do not have permission to perform this action. Only President and above can test email configurations."},
+                status=403
+            )
+
+        email_type = request.data.get("email_type", "primary")
+        recipient = request.data.get("recipient", request.user.email)
+        subject = request.data.get("subject", "Test Email Connection")
+        body = request.data.get("body", "This is a test email sent from HumorphicOS to verify SMTP connection.")
+
+        if email_type not in ["primary", "secondary"]:
+            return Response({"detail": "Invalid email type. Must be 'primary' or 'secondary'."}, status=400)
+
+        from django.conf import settings
+        from django.core.mail import EmailMultiAlternatives, get_connection
+
+        try:
+            if email_type == "secondary":
+                connection = get_connection(
+                    backend="django.core.mail.backends.smtp.EmailBackend",
+                    host=settings.SECONDARY_EMAIL_HOST,
+                    port=settings.SECONDARY_EMAIL_PORT,
+                    username=settings.SECONDARY_EMAIL_HOST_USER,
+                    password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                    use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                    fail_silently=False,
+                )
+                from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+            else:
+                connection = get_connection(
+                    backend="django.core.mail.backends.smtp.EmailBackend",
+                    host=settings.EMAIL_HOST,
+                    port=settings.EMAIL_PORT,
+                    username=settings.EMAIL_HOST_USER,
+                    password=settings.EMAIL_HOST_PASSWORD,
+                    use_tls=settings.EMAIL_USE_TLS,
+                    fail_silently=False,
+                )
+                from_email = settings.DEFAULT_FROM_EMAIL
+
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=body,
+                from_email=from_email,
+                to=[recipient],
+                connection=connection,
+            )
+            msg.send(fail_silently=False)
+            return Response({"detail": f"Test email sent successfully via {email_type} account to {recipient}!"})
+        except Exception as e:
+            return Response({
+                "detail": f"Failed to send test email via {email_type} account.",
+                "error": str(e)
+            }, status=500)
+
+

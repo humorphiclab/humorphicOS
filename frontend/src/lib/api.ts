@@ -355,6 +355,15 @@ export const notificationsApi = {
     method: "POST",
     body: JSON.stringify(data),
   }),
+  sendTestEmail: (data: {
+    email_type: "primary" | "secondary";
+    recipient: string;
+    subject?: string;
+    body?: string;
+  }) => apiFetch<{ detail: string }>("/notifications/send_test_email/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }),
 };
 
 export const reportsApi = {

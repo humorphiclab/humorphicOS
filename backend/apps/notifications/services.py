@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 import threading
 
-def _send_email_thread(user, title, message, link, priority):
+def _send_email_thread(user, title, message, link, priority, email_type="primary"):
     try:
         # Build full absolute frontend URL if link is relative
         full_link = link
@@ -118,19 +118,35 @@ def _send_email_thread(user, title, message, link, priority):
         
         text_body = f"{title}\n\n{message}\n\nView details here: {full_link}" if full_link else f"{title}\n\n{message}"
         
-        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@gmail.com")
+        if email_type == "secondary":
+            from django.core.mail import get_connection
+            connection = get_connection(
+                backend="django.core.mail.backends.smtp.EmailBackend",
+                host=settings.SECONDARY_EMAIL_HOST,
+                port=settings.SECONDARY_EMAIL_PORT,
+                username=settings.SECONDARY_EMAIL_HOST_USER,
+                password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                fail_silently=False,
+            )
+            from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+        else:
+            connection = None
+            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
+
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
             from_email=from_email,
-            to=[user.email]
+            to=[user.email],
+            connection=connection
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
     except Exception as e:
         logger.error(f"Failed to send email to {user.email}: {e}")
 
-def send_html_email_to_user(user, title, message, link="", priority="normal"):
+def send_html_email_to_user(user, title, message, link="", priority="normal", email_type="primary"):
     """
     Sends a premium, responsive dark-theme cyber-aesthetic HTML email to a user.
     Uses threading to prevent blocking the request thread.
@@ -140,7 +156,7 @@ def send_html_email_to_user(user, title, message, link="", priority="normal"):
 
     thread = threading.Thread(
         target=_send_email_thread,
-        args=(user, title, message, link, priority),
+        args=(user, title, message, link, priority, email_type),
         daemon=True
     )
     thread.start()

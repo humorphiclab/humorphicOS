@@ -193,13 +193,21 @@ FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 WHATSAPP_API_URL = env("WHATSAPP_API_URL", default="")
 WHATSAPP_API_TOKEN = env("WHATSAPP_API_TOKEN", default="")
 
-EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
-EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="smtp-mail.outlook.com")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="humorphic.labs@gmail.com")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="ikfi uhyj cwqt kxij")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="info@humorphic.in")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="humorphic.labs@hotmail.com")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="humorPhic@1abs")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="humorphic.labs@hotmail.com")
+
+# Secondary Email Settings (Gmail)
+SECONDARY_EMAIL_HOST = env("SECONDARY_EMAIL_HOST", default="smtp.gmail.com")
+SECONDARY_EMAIL_PORT = env.int("SECONDARY_EMAIL_PORT", default=587)
+SECONDARY_EMAIL_USE_TLS = env.bool("SECONDARY_EMAIL_USE_TLS", default=True)
+SECONDARY_EMAIL_HOST_USER = env("SECONDARY_EMAIL_HOST_USER", default="humorphic.labs@gmail.com")
+SECONDARY_EMAIL_HOST_PASSWORD = env("SECONDARY_EMAIL_HOST_PASSWORD", default="ikfi uhyj cwqt kxij")
+SECONDARY_DEFAULT_FROM_EMAIL = env("SECONDARY_DEFAULT_FROM_EMAIL", default="humorphic.labs@gmail.com")
 
 SESSION_COOKIE_AGE = 86400
 SESSION_ENGINE = "django.contrib.sessions.backends.db"  
