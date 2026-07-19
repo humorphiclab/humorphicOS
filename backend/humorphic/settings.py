@@ -200,6 +200,7 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="humorphic.labs@hotmail.com")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="humorPhic@1abs")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="humorphic.labs@hotmail.com")
+EMAIL_TIMEOUT = 10
 
 # Secondary Email Settings (Gmail)
 SECONDARY_EMAIL_HOST = env("SECONDARY_EMAIL_HOST", default="smtp.gmail.com")
@@ -208,6 +209,13 @@ SECONDARY_EMAIL_USE_TLS = env.bool("SECONDARY_EMAIL_USE_TLS", default=True)
 SECONDARY_EMAIL_HOST_USER = env("SECONDARY_EMAIL_HOST_USER", default="humorphic.labs@gmail.com")
 SECONDARY_EMAIL_HOST_PASSWORD = env("SECONDARY_EMAIL_HOST_PASSWORD", default="ikfi uhyj cwqt kxij")
 SECONDARY_DEFAULT_FROM_EMAIL = env("SECONDARY_DEFAULT_FROM_EMAIL", default="humorphic.labs@gmail.com")
+
+# Resend HTTP API Email Settings
+RESEND_API_KEY = env("RESEND_API_KEY", default="")
+RESEND_FROM_EMAIL = env("RESEND_FROM_EMAIL", default="onboarding@resend.dev")
+SECONDARY_RESEND_API_KEY = env("SECONDARY_RESEND_API_KEY", default="")
+SECONDARY_RESEND_FROM_EMAIL = env("SECONDARY_RESEND_FROM_EMAIL", default="onboarding@resend.dev")
+FRONTEND_EMAIL_SECRET = env("FRONTEND_EMAIL_SECRET", default="your-frontend-email-secret-token")
 
 SESSION_COOKIE_AGE = 86400
 SESSION_ENGINE = "django.contrib.sessions.backends.db"  

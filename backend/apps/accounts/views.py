@@ -415,3 +415,31 @@ class AuthConfigView(APIView):
             "google_enabled": bool(settings.GOOGLE_CLIENT_ID),
             "google_client_id": settings.GOOGLE_CLIENT_ID or None,
         })
+
+
+class GetRoleEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Authenticate request via shared secret
+        auth_header = request.headers.get("X-Email-Secret")
+        expected_secret = getattr(settings, "FRONTEND_EMAIL_SECRET", "")
+
+        if not expected_secret or auth_header != expected_secret:
+            return Response({"detail": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        role_slug = request.query_params.get("role", "").strip().lower()
+        if not role_slug:
+            return Response({"detail": "Role query parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Handle hardcoded mapping for contact support email
+        if role_slug == "contact":
+            contact_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
+            return Response({"email": contact_email})
+
+        # Query user with the given role slug
+        user = User.objects.filter(role__slug=role_slug, is_active=True).first()
+        if not user or not user.email:
+            return Response({"detail": "No user found for this role"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"email": user.email})

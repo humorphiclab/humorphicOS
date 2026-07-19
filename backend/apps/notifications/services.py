@@ -1,11 +1,82 @@
 import logging
+import threading
+import json
+import urllib.request
+import urllib.error
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from .models import Notification, NotificationPreference
 
 logger = logging.getLogger(__name__)
 
-import threading
+def send_via_resend(api_key, from_email, to_email, subject, text_body, html_body):
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "from": from_email,
+        "to": [to_email] if isinstance(to_email, str) else to_email,
+        "subject": subject,
+        "text": text_body,
+        "html": html_body
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST"
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response_data = response.read().decode("utf-8")
+            return True, response_data
+    except urllib.error.HTTPError as e:
+        error_msg = e.read().decode("utf-8")
+        return False, f"HTTP Error {e.code}: {error_msg}"
+    except Exception as e:
+        return False, str(e)
+
+def send_via_frontend(to_email, subject, text_body, html_body, sender_type="primary", category="default"):
+    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    url = f"{frontend_url}/api/send-email"
+    secret = getattr(settings, "FRONTEND_EMAIL_SECRET", "")
+    
+    if not secret:
+        return False, "FRONTEND_EMAIL_SECRET not set in Django settings"
+        
+    headers = {
+        "Content-Type": "application/json",
+        "X-Email-Secret": secret
+    }
+    payload = {
+        "to": to_email,
+        "subject": subject,
+        "text": text_body,
+        "html": html_body,
+        "sender_type": sender_type,
+        "category": category
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST"
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response_data = response.read().decode("utf-8")
+            return True, response_data
+    except urllib.error.HTTPError as e:
+        error_msg = e.read().decode("utf-8")
+        return False, f"HTTP Error {e.code}: {error_msg}"
+    except Exception as e:
+        return False, str(e)
 
 def _send_email_thread(user, title, message, link, priority, email_type="primary"):
     try:
@@ -122,67 +193,174 @@ def _send_email_thread(user, title, message, link, priority, email_type="primary
         last_error = None
         current_email_type = email_type
 
+        # We determine the category based on the email content or subject
+        category = "default"
+        if "task" in subject.lower() or "task" in message.lower():
+            category = "tasks"
+        elif "meeting" in subject.lower() or "meeting" in message.lower():
+            category = "meetings"
+        elif "notification" in subject.lower():
+            category = "notifications"
+        elif "verification" in subject.lower() or "code" in subject.lower() or "auth" in subject.lower():
+            category = "auth"
+
+        # Check if FRONTEND_EMAIL_SECRET is set
+        frontend_secret = getattr(settings, "FRONTEND_EMAIL_SECRET", "")
+        primary_resend_key = getattr(settings, "RESEND_API_KEY", "")
+        secondary_resend_key = getattr(settings, "SECONDARY_RESEND_API_KEY", "")
+
         # Try initial connection
         try:
-            if current_email_type == "secondary":
-                from django.core.mail import get_connection
-                connection = get_connection(
-                    backend="django.core.mail.backends.smtp.EmailBackend",
-                    host=settings.SECONDARY_EMAIL_HOST,
-                    port=settings.SECONDARY_EMAIL_PORT,
-                    username=settings.SECONDARY_EMAIL_HOST_USER,
-                    password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
-                    use_tls=settings.SECONDARY_EMAIL_USE_TLS,
-                    fail_silently=False,
-                )
-                from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
-            else:
-                connection = None
-                from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
+            if frontend_secret:
+                logger.info(f"Sending email to {user.email} via Frontend API ({current_email_type})...")
+                api_sender_type = "primary"
+                if current_email_type == "secondary":
+                    api_sender_type = "secondary"
+                elif current_email_type == "tertiary" or (current_email_type == "secondary" and "gmail" in getattr(settings, "SECONDARY_EMAIL_HOST_USER", "")):
+                    api_sender_type = "tertiary"
 
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_body,
-                from_email=from_email,
-                to=[user.email],
-                connection=connection
-            )
-            msg.attach_alternative(html_body, "text/html")
-            msg.send(fail_silently=False)
-            sent_successfully = True
+                success, res_msg = send_via_frontend(
+                    to_email=user.email,
+                    subject=subject,
+                    text_body=text_body,
+                    html_body=html_body,
+                    sender_type=api_sender_type,
+                    category=category
+                )
+                if success:
+                    sent_successfully = True
+                else:
+                    raise Exception(f"Frontend API error: {res_msg}")
+            else:
+                if current_email_type == "secondary":
+                    from django.core.mail import get_connection
+                    connection = get_connection(
+                        backend="django.core.mail.backends.smtp.EmailBackend",
+                        host=settings.SECONDARY_EMAIL_HOST,
+                        port=settings.SECONDARY_EMAIL_PORT,
+                        username=settings.SECONDARY_EMAIL_HOST_USER,
+                        password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                        use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                        fail_silently=False,
+                        timeout=10,
+                    )
+                    from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_body,
+                        from_email=from_email,
+                        to=[user.email],
+                        connection=connection
+                    )
+                    msg.attach_alternative(html_body, "text/html")
+                    msg.send(fail_silently=False)
+                    sent_successfully = True
+                else:
+                    if primary_resend_key:
+                        logger.info(f"Sending email to {user.email} via Primary Resend API...")
+                        success, res_msg = send_via_resend(
+                            api_key=primary_resend_key,
+                            from_email=getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev"),
+                            to_email=user.email,
+                            subject=subject,
+                            text_body=text_body,
+                            html_body=html_body
+                        )
+                        if success:
+                            sent_successfully = True
+                        else:
+                            raise Exception(f"Resend error: {res_msg}")
+                    else:
+                        connection = None
+                        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
+                        msg = EmailMultiAlternatives(
+                            subject=subject,
+                            body=text_body,
+                            from_email=from_email,
+                            to=[user.email],
+                            connection=connection
+                        )
+                        msg.attach_alternative(html_body, "text/html")
+                        msg.send(fail_silently=False)
+                        sent_successfully = True
         except Exception as e:
             last_error = e
-            logger.warning(f"Failed to send email via {current_email_type} SMTP to {user.email}: {e}")
+            logger.warning(f"Failed to send email via {current_email_type} (Frontend/SMTP) to {user.email}: {e}")
 
-        # Fallback: if primary failed, try secondary (Gmail) connection
+        # Fallback: if primary failed, try secondary connection
         if not sent_successfully and current_email_type == "primary":
-            logger.info(f"Attempting fallback to secondary (Gmail) SMTP for {user.email}...")
+            logger.info(f"Attempting fallback to secondary connection for {user.email}...")
             try:
-                from django.core.mail import get_connection
-                connection = get_connection(
-                    backend="django.core.mail.backends.smtp.EmailBackend",
-                    host=settings.SECONDARY_EMAIL_HOST,
-                    port=settings.SECONDARY_EMAIL_PORT,
-                    username=settings.SECONDARY_EMAIL_HOST_USER,
-                    password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
-                    use_tls=settings.SECONDARY_EMAIL_USE_TLS,
-                    fail_silently=False,
-                )
-                from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
-
-                msg = EmailMultiAlternatives(
-                    subject=subject,
-                    body=text_body,
-                    from_email=from_email,
-                    to=[user.email],
-                    connection=connection
-                )
-                msg.attach_alternative(html_body, "text/html")
-                msg.send(fail_silently=False)
-                sent_successfully = True
-                logger.info(f"Fallback email sent successfully to {user.email} via secondary SMTP.")
+                if frontend_secret:
+                    logger.info(f"Sending fallback email to {user.email} via Frontend API (secondary)...")
+                    success, res_msg = send_via_frontend(
+                        to_email=user.email,
+                        subject=subject,
+                        text_body=text_body,
+                        html_body=html_body,
+                        sender_type="secondary",
+                        category=category
+                    )
+                    if success:
+                        sent_successfully = True
+                        logger.info(f"Fallback email sent successfully to {user.email} via Frontend API (secondary).")
+                    else:
+                        logger.info(f"Sending fallback email to {user.email} via Frontend API (tertiary)...")
+                        success, res_msg = send_via_frontend(
+                            to_email=user.email,
+                            subject=subject,
+                            text_body=text_body,
+                            html_body=html_body,
+                            sender_type="tertiary",
+                            category=category
+                        )
+                        if success:
+                            sent_successfully = True
+                            logger.info(f"Fallback email sent successfully to {user.email} via Frontend API (tertiary).")
+                        else:
+                            raise Exception(f"Frontend API fallback error: {res_msg}")
+                else:
+                    if secondary_resend_key:
+                        logger.info(f"Sending fallback email to {user.email} via Secondary Resend API...")
+                        success, res_msg = send_via_resend(
+                            api_key=secondary_resend_key,
+                            from_email=getattr(settings, "SECONDARY_RESEND_FROM_EMAIL", "onboarding@resend.dev"),
+                            to_email=user.email,
+                            subject=subject,
+                            text_body=text_body,
+                            html_body=html_body
+                        )
+                        if success:
+                            sent_successfully = True
+                            logger.info(f"Fallback email sent successfully to {user.email} via Resend API.")
+                        else:
+                            raise Exception(f"Resend error: {res_msg}")
+                    else:
+                        from django.core.mail import get_connection
+                        connection = get_connection(
+                            backend="django.core.mail.backends.smtp.EmailBackend",
+                            host=settings.SECONDARY_EMAIL_HOST,
+                            port=settings.SECONDARY_EMAIL_PORT,
+                            username=settings.SECONDARY_EMAIL_HOST_USER,
+                            password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                            use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                            fail_silently=False,
+                            timeout=10,
+                        )
+                        from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+                        msg = EmailMultiAlternatives(
+                            subject=subject,
+                            body=text_body,
+                            from_email=from_email,
+                            to=[user.email],
+                            connection=connection
+                        )
+                        msg.attach_alternative(html_body, "text/html")
+                        msg.send(fail_silently=False)
+                        sent_successfully = True
+                        logger.info(f"Fallback email sent successfully to {user.email} via secondary SMTP.")
             except Exception as e:
-                logger.error(f"Fallback email to {user.email} via secondary SMTP also failed: {e}")
+                logger.error(f"Fallback email to {user.email} via secondary connection also failed: {e}")
     except Exception as general_error:
         logger.error(f"General error in _send_email_thread for {user.email}: {general_error}")
 

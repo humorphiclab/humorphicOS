@@ -124,41 +124,96 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": "Invalid email type. Must be 'primary' or 'secondary'."}, status=400)
 
         from django.conf import settings
-        from django.core.mail import EmailMultiAlternatives, get_connection
+        from .services import send_via_resend, send_via_frontend
+
+        frontend_secret = getattr(settings, "FRONTEND_EMAIL_SECRET", "")
 
         try:
-            if email_type == "secondary":
-                connection = get_connection(
-                    backend="django.core.mail.backends.smtp.EmailBackend",
-                    host=settings.SECONDARY_EMAIL_HOST,
-                    port=settings.SECONDARY_EMAIL_PORT,
-                    username=settings.SECONDARY_EMAIL_HOST_USER,
-                    password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
-                    use_tls=settings.SECONDARY_EMAIL_USE_TLS,
-                    fail_silently=False,
-                )
-                from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
-            else:
-                connection = get_connection(
-                    backend="django.core.mail.backends.smtp.EmailBackend",
-                    host=settings.EMAIL_HOST,
-                    port=settings.EMAIL_PORT,
-                    username=settings.EMAIL_HOST_USER,
-                    password=settings.EMAIL_HOST_PASSWORD,
-                    use_tls=settings.EMAIL_USE_TLS,
-                    fail_silently=False,
-                )
-                from_email = settings.DEFAULT_FROM_EMAIL
+            if frontend_secret:
+                api_sender_type = "primary"
+                if email_type == "secondary":
+                    api_sender_type = "secondary"
+                elif email_type == "tertiary":
+                    api_sender_type = "tertiary"
 
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=body,
-                from_email=from_email,
-                to=[recipient],
-                connection=connection,
-            )
-            msg.send(fail_silently=False)
-            return Response({"detail": f"Test email sent successfully via {email_type} account to {recipient}!"})
+                success, res_msg = send_via_frontend(
+                    to_email=recipient,
+                    subject=subject,
+                    text_body=body,
+                    html_body=f"<p>{body}</p>",
+                    sender_type=api_sender_type,
+                    category="default"
+                )
+                if not success:
+                    raise Exception(f"Frontend API error: {res_msg}")
+                return Response({"detail": f"Test email sent successfully via Frontend API ({api_sender_type}) to {recipient}!"})
+            else:
+                if email_type == "secondary":
+                    resend_key = getattr(settings, "SECONDARY_RESEND_API_KEY", "")
+                    if resend_key:
+                        from_email = getattr(settings, "SECONDARY_RESEND_FROM_EMAIL", "onboarding@resend.dev")
+                        success, res_msg = send_via_resend(
+                            api_key=resend_key,
+                            from_email=from_email,
+                            to_email=recipient,
+                            subject=subject,
+                            text_body=body,
+                            html_body=f"<p>{body}</p>"
+                        )
+                        if not success:
+                            raise Exception(f"Resend error: {res_msg}")
+                        return Response({"detail": f"Test email sent successfully via secondary Resend API to {recipient}!"})
+                    else:
+                        from django.core.mail import EmailMultiAlternatives, get_connection
+                        connection = get_connection(
+                            backend="django.core.mail.backends.smtp.EmailBackend",
+                            host=settings.SECONDARY_EMAIL_HOST,
+                            port=settings.SECONDARY_EMAIL_PORT,
+                            username=settings.SECONDARY_EMAIL_HOST_USER,
+                            password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                            use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                            fail_silently=False,
+                            timeout=10,
+                        )
+                        from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+                else:
+                    resend_key = getattr(settings, "RESEND_API_KEY", "")
+                    if resend_key:
+                        from_email = getattr(settings, "RESEND_FROM_EMAIL", "onboarding@resend.dev")
+                        success, res_msg = send_via_resend(
+                            api_key=resend_key,
+                            from_email=from_email,
+                            to_email=recipient,
+                            subject=subject,
+                            text_body=body,
+                            html_body=f"<p>{body}</p>"
+                        )
+                        if not success:
+                            raise Exception(f"Resend error: {res_msg}")
+                        return Response({"detail": f"Test email sent successfully via primary Resend API to {recipient}!"})
+                    else:
+                        from django.core.mail import EmailMultiAlternatives, get_connection
+                        connection = get_connection(
+                            backend="django.core.mail.backends.smtp.EmailBackend",
+                            host=settings.EMAIL_HOST,
+                            port=settings.EMAIL_PORT,
+                            username=settings.EMAIL_HOST_USER,
+                            password=settings.EMAIL_HOST_PASSWORD,
+                            use_tls=settings.EMAIL_USE_TLS,
+                            fail_silently=False,
+                            timeout=10,
+                        )
+                        from_email = settings.DEFAULT_FROM_EMAIL
+
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=body,
+                    from_email=from_email,
+                    to=[recipient],
+                    connection=connection,
+                )
+                msg.send(fail_silently=False)
+                return Response({"detail": f"Test email sent successfully via {email_type} SMTP to {recipient}!"})
         except Exception as e:
             return Response({
                 "detail": f"Failed to send test email via {email_type} account.",

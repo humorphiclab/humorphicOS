@@ -5,6 +5,7 @@ from .views import (
     AuthConfigView,
     ChangePasswordView,
     DashboardStatsView,
+    GetRoleEmailView,
     GoogleLoginView,
     LoginView,
     MeView,
@@ -32,4 +33,5 @@ urlpatterns = [
     path("users/<int:pk>/role/", UserRoleUpdateView.as_view(), name="user-role"),
     path("dashboard/", DashboardStatsView.as_view(), name="dashboard"),
     path("audit-logs/", AuditLogListView.as_view(), name="audit-logs"),
+    path("get-role-email/", GetRoleEmailView.as_view(), name="get-role-email"),
 ]
