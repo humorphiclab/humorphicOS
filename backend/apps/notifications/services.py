@@ -398,6 +398,15 @@ def send_notification_to_user(user, pref_key, title, message, link="", priority=
         "task_needs_changes": Notification.Type.TASK,
         "messages": Notification.Type.MESSAGE,
         "meetings": Notification.Type.MEETING,
+        "announcements": Notification.Type.ANNOUNCEMENT,
+        "events": Notification.Type.EVENT,
+        "lectures": Notification.Type.LECTURE,
+        "reminders": Notification.Type.REMINDER,
+        "reports": Notification.Type.REPORT,
+        "inventory": Notification.Type.INVENTORY,
+        "leave_requests": Notification.Type.LEAVE_REQUEST,
+        "gamification": Notification.Type.GAMIFICATION,
+        "certificates": Notification.Type.CERTIFICATE,
     }
     notification_type = type_mapping.get(pref_key, Notification.Type.SYSTEM)
 

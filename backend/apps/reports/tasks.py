@@ -60,18 +60,23 @@ def send_task_deadline_reminders():
 @shared_task
 def send_weekly_summary():
     from apps.reports.services import generate_weekly_report
+    from apps.notifications.services import send_notification_to_user
 
     admin = User.objects.filter(is_superuser=True).first()
     if admin:
         generate_weekly_report(admin)
         for u in User.objects.filter(role__is_leadership=True, is_active=True):
-            Notification.objects.create(
-                user=u,
-                title="Weekly Summary Ready",
-                message="Weekly organizational report has been generated.",
-                notification_type=Notification.Type.SYSTEM,
-                link="/reports",
-            )
+            try:
+                send_notification_to_user(
+                    user=u,
+                    pref_key="reports",
+                    title="Weekly Summary Ready",
+                    message="Weekly organizational report has been generated.",
+                    link="/reports",
+                    priority="low"
+                )
+            except Exception:
+                pass
 
 
 @shared_task
@@ -108,3 +113,90 @@ def send_whatsapp_reminder(user_id: int, message: str):
             return {"sent": True, "status": resp.status}
     except Exception as e:
         return {"sent": False, "reason": str(e)}
+
+
+@shared_task
+def send_attendance_reminder(priority: str = "normal"):
+    """
+    Reminds active members to mark their attendance if they haven't done so today.
+    Priority can be low (morning), normal (afternoon), or urgent (evening).
+    """
+    today = timezone.now().date()
+    from apps.attendance.models import AttendanceRecord
+    from apps.notifications.services import send_notification_to_user
+
+    # Find users who have already marked attendance today
+    marked_users = set(AttendanceRecord.objects.filter(date=today).values_list("user_id", flat=True))
+    
+    # Find all active members who haven't marked attendance
+    members = User.objects.filter(is_active=True).exclude(id__in=marked_users)
+
+    # Customize message based on priority/time
+    if priority == "low":
+        msg = "Morning reminder: Please remember to mark your attendance for today."
+    elif priority == "urgent":
+        msg = "URGENT reminder: You have not marked your attendance for today. Please check in immediately!"
+    else:
+        msg = "Afternoon reminder: Please mark your attendance for today if you haven't done so yet."
+
+    for member in members:
+        try:
+            send_notification_to_user(
+                user=member,
+                pref_key="reminders",
+                title="Attendance Reminder",
+                message=msg,
+                link="/attendance",
+                priority=priority
+            )
+            # Send WhatsApp if phone exists
+            if member.phone and getattr(settings, "WHATSAPP_API_URL", ""):
+                send_whatsapp_reminder.delay(member.id, f"{msg} Link: {getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')}/attendance")
+        except Exception:
+            pass
+
+
+@shared_task
+def send_low_stock_alerts():
+    """
+    Scans components and sends a consolidated low-stock alert to leadership/managers.
+    """
+    from apps.inventory.models import Component
+    from apps.notifications.services import send_notification_to_user
+    from django.db import models
+
+    low_stock_items = Component.objects.filter(is_active=True)
+    low_stock_list = [c for c in low_stock_items if c.is_low_stock]
+
+    if not low_stock_list:
+        return
+
+    # Build list string
+    items_str = ", ".join([f"{c.name} (Qty: {c.quantity}, Min: {c.min_stock})" for c in low_stock_list[:5]])
+    if len(low_stock_list) > 5:
+        items_str += f" and {len(low_stock_list) - 5} more items"
+
+    title = "Low Stock Alert"
+    message = f"The following inventory items are low on stock: {items_str}."
+    link = "/inventory"
+    priority = "medium"
+
+    # Find leadership / managers
+    recipients = User.objects.filter(
+        models.Q(is_superuser=True) |
+        models.Q(role__is_leadership=True) |
+        models.Q(role__slug__in=["founder", "president", "super_admin", "vice_president"])
+    ).filter(is_active=True).distinct()
+
+    for recipient in recipients:
+        try:
+            send_notification_to_user(
+                user=recipient,
+                pref_key="inventory",
+                title=title,
+                message=message,
+                link=link,
+                priority=priority
+            )
+        except Exception:
+            pass

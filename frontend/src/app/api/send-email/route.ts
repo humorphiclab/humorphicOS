@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 
 export async function POST(request: Request) {
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
     // Determine sender address based on category for primary domain
     let fromEmail = 'noreply@humorphichlabs.club';
     if (category === 'notifications') {
-      fromEmail = 'notifications@humorphichlabs.club';
+      fromEmail = 'notification@humorphichlabs.club';
     } else if (category === 'tasks') {
       fromEmail = 'tasks@humorphichlabs.club';
     } else if (category === 'meetings') {
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
     if (sender_type === 'primary') {
       const resendApiKey = process.env.RESEND_API_KEY;
       if (!resendApiKey) {
-        return NextResponse.json({ error: 'RESEND_API_KEY not configured on Vercel' }, { status: 500 });
+        return NextResponse.json({ error: 'RESEND_API_KEY not configured on Vercel/Cloudflare' }, { status: 500 });
       }
 
       const resend = new Resend(resendApiKey);
@@ -65,19 +64,28 @@ export async function POST(request: Request) {
       const pass = process.env.EMAIL_HOST_PASSWORD;
 
       if (!user || !pass) {
-        return NextResponse.json({ error: 'Hotmail SMTP credentials not configured on Vercel' }, { status: 500 });
+        return NextResponse.json({ error: 'Hotmail SMTP credentials not configured' }, { status: 500 });
       }
 
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: false, // TLS
-        auth: { user, pass },
-        tls: {
-          ciphers: 'SSLv3',
-          rejectUnauthorized: false
-        }
-      });
+      let transporter;
+      try {
+        const nodemailer = await import('nodemailer');
+        transporter = nodemailer.default.createTransport({
+          host,
+          port,
+          secure: false, // TLS
+          auth: { user, pass },
+          tls: {
+            ciphers: 'SSLv3',
+            rejectUnauthorized: false
+          }
+        });
+      } catch (err: any) {
+        return NextResponse.json(
+          { error: 'SMTP sending is not supported on this platform/runtime (Edge Runtime). Use Resend (primary) instead.' },
+          { status: 500 }
+        );
+      }
 
       const info = await transporter.sendMail({
         from: user,
@@ -98,18 +106,27 @@ export async function POST(request: Request) {
       const pass = process.env.SECONDARY_EMAIL_HOST_PASSWORD;
 
       if (!user || !pass) {
-        return NextResponse.json({ error: 'Gmail SMTP credentials not configured on Vercel' }, { status: 500 });
+        return NextResponse.json({ error: 'Gmail SMTP credentials not configured' }, { status: 500 });
       }
 
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: false, // TLS
-        auth: { user, pass },
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
+      let transporter;
+      try {
+        const nodemailer = await import('nodemailer');
+        transporter = nodemailer.default.createTransport({
+          host,
+          port,
+          secure: false, // TLS
+          auth: { user, pass },
+          tls: {
+            rejectUnauthorized: false
+          }
+        });
+      } catch (err: any) {
+        return NextResponse.json(
+          { error: 'SMTP sending is not supported on this platform/runtime (Edge Runtime). Use Resend (primary) instead.' },
+          { status: 500 }
+        );
+      }
 
       const info = await transporter.sendMail({
         from: user,

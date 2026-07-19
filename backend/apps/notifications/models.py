@@ -10,6 +10,13 @@ class Notification(models.Model):
         REMINDER = "reminder", "Reminder"
         SYSTEM = "system", "System"
         MESSAGE = "message", "Message"
+        LECTURE = "lecture", "Lecture"
+        EVENT = "event", "Event"
+        REPORT = "report", "Report"
+        INVENTORY = "inventory", "Inventory"
+        LEAVE_REQUEST = "leave_request", "Leave Request"
+        GAMIFICATION = "gamification", "Gamification"
+        CERTIFICATE = "certificate", "Certificate"
 
     class Priority(models.TextChoices):
         LOW = "low", "Low"
@@ -57,6 +64,42 @@ class NotificationPreference(models.Model):
     # Meeting preferences
     email_meetings = models.BooleanField(default=True)
     in_app_meetings = models.BooleanField(default=True)
+
+    # Announcement preferences
+    email_announcements = models.BooleanField(default=True)
+    in_app_announcements = models.BooleanField(default=True)
+
+    # Event preferences
+    email_events = models.BooleanField(default=True)
+    in_app_events = models.BooleanField(default=True)
+
+    # Lecture preferences
+    email_lectures = models.BooleanField(default=True)
+    in_app_lectures = models.BooleanField(default=True)
+
+    # Daily Update / Reminders preferences
+    email_reminders = models.BooleanField(default=True)
+    in_app_reminders = models.BooleanField(default=True)
+
+    # Report preferences
+    email_reports = models.BooleanField(default=True)
+    in_app_reports = models.BooleanField(default=True)
+
+    # Inventory preferences
+    email_inventory = models.BooleanField(default=True)
+    in_app_inventory = models.BooleanField(default=True)
+
+    # Leave Request preferences
+    email_leave_requests = models.BooleanField(default=True)
+    in_app_leave_requests = models.BooleanField(default=True)
+
+    # Gamification preferences
+    email_gamification = models.BooleanField(default=True)
+    in_app_gamification = models.BooleanField(default=True)
+
+    # Certificate preferences
+    email_certificates = models.BooleanField(default=True)
+    in_app_certificates = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Notification Preferences for {self.user}"

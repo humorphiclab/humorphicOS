@@ -432,8 +432,8 @@ class GetRoleEmailView(APIView):
         if not role_slug:
             return Response({"detail": "Role query parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Handle hardcoded mapping for contact support email
-        if role_slug == "contact":
+        # Handle hardcoded mapping for contact/support email
+        if role_slug in ["contact", "support"]:
             contact_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
             return Response({"email": contact_email})
 

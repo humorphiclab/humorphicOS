@@ -24,9 +24,25 @@ class UserProfile(models.Model):
     meetings_attended = models.PositiveIntegerField(default=0)
 
     def add_xp(self, amount):
+        old_level = self.level
         self.xp += amount
-        self.level = max(1, self.xp // 100 + 1)
+        new_level = max(1, self.xp // 100 + 1)
+        self.level = new_level
         self.save()
+        
+        if new_level > old_level:
+            try:
+                from apps.notifications.services import send_notification_to_user
+                send_notification_to_user(
+                    user=self.user,
+                    pref_key="gamification",
+                    title="🎉 Level Up!",
+                    message=f"Congratulations! You have leveled up to Level {new_level}!",
+                    link="/my-space",
+                    priority="normal"
+                )
+            except Exception:
+                pass
 
     def __str__(self):
         return f"{self.user} - Level {self.level}"

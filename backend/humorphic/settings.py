@@ -183,6 +183,25 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.reports.tasks.send_weekly_summary",
         "schedule": crontab(hour=10, minute=0, day_of_week=0),
     },
+    "attendance-reminder-morning": {
+        "task": "apps.reports.tasks.send_attendance_reminder",
+        "schedule": crontab(hour=10, minute=0),
+        "kwargs": {"priority": "low"},
+    },
+    "attendance-reminder-afternoon": {
+        "task": "apps.reports.tasks.send_attendance_reminder",
+        "schedule": crontab(hour=14, minute=0),
+        "kwargs": {"priority": "normal"},
+    },
+    "attendance-reminder-evening": {
+        "task": "apps.reports.tasks.send_attendance_reminder",
+        "schedule": crontab(hour=18, minute=0),
+        "kwargs": {"priority": "urgent"},
+    },
+    "low-stock-alerts-daily": {
+        "task": "apps.reports.tasks.send_low_stock_alerts",
+        "schedule": crontab(hour=8, minute=30),
+    },
 }
 
 GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")

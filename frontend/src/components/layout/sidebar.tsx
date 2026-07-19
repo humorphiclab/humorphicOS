@@ -104,9 +104,7 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 h-full w-64 border-r border-card-border bg-card flex flex-col z-20">
       <div className="p-4 border-b border-card-border">
         <div className="flex items-center gap-2.5">
-          <div className="rounded-lg bg-primary p-2">
-            <Bot className="h-5 w-5 text-white" />
-          </div>
+          <img src="/site_logo.png" alt="HumorphicOS Logo" className="h-9 w-9 object-contain rounded-lg" />
           <div>
             <h1 className="font-bold text-sm">HumorphicOS</h1>
             <p className="text-xs text-muted">Robotics Club Platform</p>

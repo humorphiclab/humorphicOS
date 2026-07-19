@@ -163,7 +163,7 @@ export default function RegisterPage() {
 
         <div className="relative z-10 p-10">
           <div className="flex items-center gap-3">
-            <div className="inline-flex rounded-xl bg-primary p-2.5"><Bot className="h-7 w-7 text-white" /></div>
+            <img src="/site_logo.png" alt="HumorphicOS Logo" className="h-12 w-12 object-contain rounded-xl" />
             <span className="font-bold text-xl tracking-tight text-white">HumorphicOS</span>
           </div>
         </div>
@@ -186,7 +186,7 @@ export default function RegisterPage() {
 
         {/* Mobile logo */}
         <div className="flex lg:hidden items-center gap-2 mb-4 shrink-0">
-          <div className="inline-flex rounded-xl bg-primary p-2"><Bot className="h-5 w-5 text-white" /></div>
+          <img src="/site_logo.png" alt="HumorphicOS Logo" className="h-9 w-9 object-contain rounded-xl" />
           <span className="font-bold text-base">HumorphicOS</span>
         </div>
 

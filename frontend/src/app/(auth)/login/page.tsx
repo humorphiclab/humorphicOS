@@ -68,9 +68,7 @@ export default function LoginPage() {
         {/* Top logo */}
         <div className="relative z-10 p-10">
           <div className="flex items-center gap-3">
-            <div className="inline-flex rounded-xl bg-primary p-2.5">
-              <Bot className="h-7 w-7 text-white" />
-            </div>
+            <img src="/site_logo.png" alt="HumorphicOS Logo" className="h-12 w-12 object-contain rounded-xl" />
             <span className="font-bold text-xl tracking-tight text-white">HumorphicOS</span>
           </div>
         </div>
@@ -97,9 +95,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile-only logo */}
           <div className="flex lg:hidden items-center gap-2 mb-8">
-            <div className="inline-flex rounded-xl bg-primary p-2">
-              <Bot className="h-6 w-6 text-white" />
-            </div>
+            <img src="/site_logo.png" alt="HumorphicOS Logo" className="h-10 w-10 object-contain rounded-xl" />
             <span className="font-bold text-lg tracking-tight">HumorphicOS</span>
           </div>
 

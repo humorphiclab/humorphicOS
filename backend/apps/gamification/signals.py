@@ -31,3 +31,21 @@ def award_daily_update_xp(sender, instance, created, **kwargs):
     profile, _ = UserProfile.objects.get_or_create(user=instance.user)
     profile.updates_submitted += 1
     profile.add_xp(10)
+
+
+@receiver(post_save, sender=Achievement)
+def notify_new_achievement(sender, instance, created, **kwargs):
+    if not created:
+        return
+    try:
+        from apps.notifications.services import send_notification_to_user
+        send_notification_to_user(
+            user=instance.user,
+            pref_key="gamification",
+            title="🏆 Achievement Unlocked!",
+            message=f"You unlocked the achievement '{instance.title}': {instance.description} (+{instance.xp_awarded} XP)",
+            link="/my-space",
+            priority="low"
+        )
+    except Exception:
+        pass
