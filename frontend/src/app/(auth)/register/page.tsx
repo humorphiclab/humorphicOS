@@ -127,7 +127,11 @@ export default function RegisterPage() {
       fd.append("batch", `${form.start_year}-${form.end_year}`);
       if (avatar) fd.append("avatar", avatar);
 
-      if (gMode) { await authApi.updateMe(fd); router.push("/dashboard"); }
+      if (gMode) {
+        const updatedUser = await authApi.updateMe(fd);
+        setStoredUser(updatedUser);
+        router.push("/dashboard");
+      }
       else { await authApi.register(fd); router.push("/login"); }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
