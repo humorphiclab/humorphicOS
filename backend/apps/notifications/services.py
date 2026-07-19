@@ -118,33 +118,73 @@ def _send_email_thread(user, title, message, link, priority, email_type="primary
         
         text_body = f"{title}\n\n{message}\n\nView details here: {full_link}" if full_link else f"{title}\n\n{message}"
         
-        if email_type == "secondary":
-            from django.core.mail import get_connection
-            connection = get_connection(
-                backend="django.core.mail.backends.smtp.EmailBackend",
-                host=settings.SECONDARY_EMAIL_HOST,
-                port=settings.SECONDARY_EMAIL_PORT,
-                username=settings.SECONDARY_EMAIL_HOST_USER,
-                password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
-                use_tls=settings.SECONDARY_EMAIL_USE_TLS,
-                fail_silently=False,
-            )
-            from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
-        else:
-            connection = None
-            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
+        sent_successfully = False
+        last_error = None
+        current_email_type = email_type
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=from_email,
-            to=[user.email],
-            connection=connection
-        )
-        msg.attach_alternative(html_body, "text/html")
-        msg.send(fail_silently=False)
-    except Exception as e:
-        logger.error(f"Failed to send email to {user.email}: {e}")
+        # Try initial connection
+        try:
+            if current_email_type == "secondary":
+                from django.core.mail import get_connection
+                connection = get_connection(
+                    backend="django.core.mail.backends.smtp.EmailBackend",
+                    host=settings.SECONDARY_EMAIL_HOST,
+                    port=settings.SECONDARY_EMAIL_PORT,
+                    username=settings.SECONDARY_EMAIL_HOST_USER,
+                    password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                    use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                    fail_silently=False,
+                )
+                from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+            else:
+                connection = None
+                from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "humorphic.labs@hotmail.com")
+
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=from_email,
+                to=[user.email],
+                connection=connection
+            )
+            msg.attach_alternative(html_body, "text/html")
+            msg.send(fail_silently=False)
+            sent_successfully = True
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Failed to send email via {current_email_type} SMTP to {user.email}: {e}")
+
+        # Fallback: if primary failed, try secondary (Gmail) connection
+        if not sent_successfully and current_email_type == "primary":
+            logger.info(f"Attempting fallback to secondary (Gmail) SMTP for {user.email}...")
+            try:
+                from django.core.mail import get_connection
+                connection = get_connection(
+                    backend="django.core.mail.backends.smtp.EmailBackend",
+                    host=settings.SECONDARY_EMAIL_HOST,
+                    port=settings.SECONDARY_EMAIL_PORT,
+                    username=settings.SECONDARY_EMAIL_HOST_USER,
+                    password=settings.SECONDARY_EMAIL_HOST_PASSWORD,
+                    use_tls=settings.SECONDARY_EMAIL_USE_TLS,
+                    fail_silently=False,
+                )
+                from_email = settings.SECONDARY_DEFAULT_FROM_EMAIL
+
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=from_email,
+                    to=[user.email],
+                    connection=connection
+                )
+                msg.attach_alternative(html_body, "text/html")
+                msg.send(fail_silently=False)
+                sent_successfully = True
+                logger.info(f"Fallback email sent successfully to {user.email} via secondary SMTP.")
+            except Exception as e:
+                logger.error(f"Fallback email to {user.email} via secondary SMTP also failed: {e}")
+    except Exception as general_error:
+        logger.error(f"General error in _send_email_thread for {user.email}: {general_error}")
 
 def send_html_email_to_user(user, title, message, link="", priority="normal", email_type="primary"):
     """
