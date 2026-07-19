@@ -34,11 +34,12 @@ export default function RegisterPage() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const currentYear = new Date().getFullYear();
   const [form, setForm] = useState({
     email: "", phone: "", username: "", password: "",
     first_name: "", last_name: "",
     enrollment_number: "", college: "",
-    branch: "CS AI", start_year: "", end_year: "",
+    branch: "CS AI", start_year: String(currentYear), end_year: String(currentYear + 4),
     skills: "", linkedin: "", github: "",
   });
 
@@ -97,14 +98,22 @@ export default function RegisterPage() {
       const { tokens, user } = await authApi.googleLogin(idToken);
       setStoredTokens(tokens);
       setStoredUser(user as Parameters<typeof setStoredUser>[0]);
-      setGMode(true);
-      up({
-        email: (user as any).email || "",
-        first_name: (user as any).first_name || "",
-        last_name: (user as any).last_name || "",
-        username: (user as any).username || "",
-        password: "",
-      });
+      
+      const u = user as any;
+      const isIncomplete = !u.enrollment_number || !u.branch || !u.batch || !u.phone || !u.college;
+      
+      if (isIncomplete) {
+        setGMode(true);
+        up({
+          email: u.email || "",
+          first_name: u.first_name || "",
+          last_name: u.last_name || "",
+          username: u.username || "",
+          password: "",
+        });
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed");
     } finally { setLoading(false); }
